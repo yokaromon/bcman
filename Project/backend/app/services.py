@@ -44,6 +44,10 @@ def detect_cards(photo: Photo, db: Session):
         if area > width * height * .04 and 1.25 <= ratio <= 2.4:
             if not any(abs(x-a[0]) < 10 and abs(y-a[1]) < 10 for a in candidates): candidates.append((x, y, w, h))
     if not candidates: candidates = [(0, 0, width, height)]
+    # 輪郭の走査順は写真上の配置と無関係（右下の名刺が先頭になることがある）。
+    # 画面では順にめくって確認するので、上の行から・行内は左からの順に並べ替える。
+    # 行の判定に自身の高さを使うと、横に並んだ名刺のわずかなy差では行が割れない。
+    candidates.sort(key=lambda box: (box[1] // max(box[3], 1), box[0]))
     for x, y, w, h in candidates[:10]:
         card = BusinessCard(photo_id=photo.id, detected_image_path="", corrected_image_path="", detection_confidence=.75 if len(candidates) else .2, x=x, y=y, width=w, height=h)
         db.add(card); db.flush()

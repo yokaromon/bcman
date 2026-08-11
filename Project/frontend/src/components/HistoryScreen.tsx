@@ -7,7 +7,10 @@ import {
   type PhotoSummary,
   type User,
 } from '../api';
-import { CardReviewScreen } from './CardReviewScreen';
+import { CardPager } from './CardPager';
+
+/** 履歴では解析はすでに終わっているので、失敗マークは付けない。 */
+const NO_FAILURES: Set<string> = new Set();
 
 const PHOTO_STATUS_LABELS: Record<string, string> = {
   uploaded: 'アップロード済み',
@@ -68,21 +71,28 @@ export function HistoryScreen({ user }: { user: User | null }) {
     }
   };
 
-  if (openCardIndex >= 0 && cards[openCardIndex]) {
-    const card = cards[openCardIndex];
+  const reloadCards = async (photoId: string) => {
+    try {
+      setCards(await fetchCards(userId, photoId));
+    } catch {
+      // 一覧の状態表示が古いままになるだけなので、閲覧は続けられる
+    }
+  };
+
+  if (openCardIndex >= 0 && cards[openCardIndex] && openPhoto) {
     return (
-      <div className="screen screen--form">
+      <div className="screen">
         <button type="button" className="back-link" onClick={() => setOpenCardIndex(-1)}>
           ← 名刺一覧へ
         </button>
-        <CardReviewScreen
-          key={card.id}
+        <CardPager
           userId={userId}
-          cardId={card.id}
-          position={openCardIndex + 1}
-          total={cards.length}
-          failed={false}
-          onAdvance={() => setOpenCardIndex(-1)}
+          cards={cards}
+          index={openCardIndex}
+          failedCardIds={NO_FAILURES}
+          confirmLabel="登録"
+          onIndexChange={setOpenCardIndex}
+          onConfirmed={() => void reloadCards(openPhoto.id)}
         />
       </div>
     );

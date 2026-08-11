@@ -11,7 +11,7 @@ import {
 } from './api';
 import { CaptureScreen } from './components/CaptureScreen';
 import { ProcessingScreen } from './components/ProcessingScreen';
-import { CardReviewScreen } from './components/CardReviewScreen';
+import { CardPager } from './components/CardPager';
 
 const POLL_INTERVAL_MS = 2500;
 const POLL_TIMEOUT_MS = 10 * 60 * 1000;
@@ -31,8 +31,8 @@ export function CaptureFlow({ user }: { user: User | null }) {
   const [photoId, setPhotoId] = useState('');
   const [cards, setCards] = useState<CardSummary[]>([]);
   const [reviewIndex, setReviewIndex] = useState(0);
+  const [confirmedCardIds, setConfirmedCardIds] = useState<Set<string>>(new Set());
   const [failedCardIds, setFailedCardIds] = useState<Set<string>>(new Set());
-  const [retryingCardIds, setRetryingCardIds] = useState<Set<string>>(new Set());
   const [fatalMessage, setFatalMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
 
@@ -53,8 +53,8 @@ export function CaptureFlow({ user }: { user: User | null }) {
     setPhotoId('');
     setCards([]);
     setReviewIndex(0);
+    setConfirmedCardIds(new Set());
     setFailedCardIds(new Set());
-    setRetryingCardIds(new Set());
     setFatalMessage('');
     setErrorMessage('');
   }, []);
@@ -85,18 +85,6 @@ export function CaptureFlow({ user }: { user: User | null }) {
       setFailedCardIds(new Set(failedRef.current));
     };
 
-    const markRetrying = (cardId: string, active: boolean) => {
-      setRetryingCardIds((current) => {
-        const next = new Set(current);
-        if (active) {
-          next.add(cardId);
-        } else {
-          next.delete(cardId);
-        }
-        return next;
-      });
-    };
-
     // 失敗した写真の未完了カードを1枚ずつ再解析する。失敗はカード単位で確定させ、
     // 他のカードの確認作業は止めない。
     const retryOnce = async (targets: CardSummary[]) => {
@@ -105,14 +93,11 @@ export function CaptureFlow({ user }: { user: User | null }) {
           return;
         }
         retriedRef.current.add(card.id);
-        markRetrying(card.id, true);
         try {
           await reprocessCard(userId, card.id);
         } catch {
           failedRef.current.add(card.id);
           syncFailed();
-        } finally {
-          markRetrying(card.id, false);
         }
       }
     };
@@ -178,13 +163,20 @@ export function CaptureFlow({ user }: { user: User | null }) {
     };
   }, [phase, photoId, userId]);
 
-  const advance = () => {
-    const isLast = reviewIndex + 1 >= cards.length;
-    if (isLast) {
+  // 登録し終えたら残りの未登録へ送る。最後のページかどうかではなく、
+  // 未登録が尽きたことをもって完了とする。
+  const handleConfirmed = (cardId: string) => {
+    const confirmed = new Set(confirmedCardIds).add(cardId);
+    setConfirmedCardIds(confirmed);
+
+    const isConfirmed = (card: CardSummary) => card.status === 'confirmed' || confirmed.has(card.id);
+    if (cards.every(isConfirmed)) {
       setPhase('done');
       return;
     }
-    setReviewIndex(reviewIndex + 1);
+
+    const ahead = cards.findIndex((card, position) => position > reviewIndex && !isConfirmed(card));
+    setReviewIndex(ahead >= 0 ? ahead : cards.findIndex((card) => !isConfirmed(card)));
   };
 
   if (phase === 'idle' || phase === 'uploading') {
@@ -211,29 +203,20 @@ export function CaptureFlow({ user }: { user: User | null }) {
     );
   }
 
-  const current = cards[reviewIndex];
-  const waitingForCurrent = Boolean(current) && !isCardReady(current.status) && !failedCardIds.has(current.id);
-  if (!current || waitingForCurrent || fatalMessage) {
-    return (
-      <ProcessingScreen
-        cards={cards}
-        failedCardIds={failedCardIds}
-        retryingCardIds={retryingCardIds}
-        fatalMessage={fatalMessage}
-        onRestart={restart}
-      />
-    );
+  if (fatalMessage || cards.length === 0) {
+    return <ProcessingScreen fatalMessage={fatalMessage} onRestart={restart} />;
   }
 
   return (
-    <CardReviewScreen
-      key={current.id}
+    <CardPager
       userId={userId}
-      cardId={current.id}
-      position={reviewIndex + 1}
-      total={cards.length}
-      failed={failedCardIds.has(current.id)}
-      onAdvance={advance}
+      cards={cards}
+      index={reviewIndex}
+      failedCardIds={failedCardIds}
+      confirmLabel="登録して次へ"
+      onIndexChange={setReviewIndex}
+      onConfirmed={handleConfirmed}
+      onFinish={() => setPhase('done')}
     />
   );
 }

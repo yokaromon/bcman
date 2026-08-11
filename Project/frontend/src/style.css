@@ -267,12 +267,66 @@ body {
 
 /* --- 名刺確認 --- */
 
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.pager__arrow {
+  min-width: var(--tap);
+  min-height: var(--tap);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--accent);
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.pager__arrow:disabled {
+  opacity: 0.35;
+}
+
+.pager__center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.pager__count {
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.pager__dots {
+  display: flex;
+  gap: 6px;
+}
+
+.pager__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--line);
+}
+
+.pager__dot--active {
+  background: var(--accent);
+}
+
 .card-image {
+  position: relative;
   display: block;
   border-radius: 12px;
   overflow: hidden;
   background: var(--surface);
   border: 1px solid var(--line);
+  /* スワイプ中にブラウザの横スクロール／戻るジェスチャへ取られないようにする */
+  touch-action: pan-y;
 }
 
 .card-image img {
@@ -281,6 +335,36 @@ body {
   max-height: 42vh;
   object-fit: contain;
   background: #f0f2f6;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.card-image__hint {
+  position: absolute;
+  left: 50%;
+  bottom: 8px;
+  transform: translateX(-50%);
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(24, 36, 53, 0.6);
+  color: #fff;
+  font-size: 0.72rem;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.review {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.waiting {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 32px 0;
 }
 
 .fields {
@@ -347,7 +431,6 @@ textarea.field__input {
   position: sticky;
   bottom: 0;
   display: grid;
-  grid-template-columns: 1fr 2fr;
   gap: 10px;
   padding: 12px 0;
   background: linear-gradient(to bottom, rgba(245, 247, 251, 0), var(--bg) 30%);

@@ -1,6 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  cardImageUrl,
   confirmCard,
   fetchCard,
   reprocessCard,
@@ -37,24 +36,30 @@ const FIELDS: FieldConfig[] = [
 type Props = {
   userId: string;
   cardId: string;
-  position: number;
-  total: number;
   failed: boolean;
-  onAdvance: () => void;
+  confirmLabel: string;
+  onConfirmed: (cardId: string) => void;
 };
 
-export function CardReviewScreen({ userId, cardId, position, total, failed, onAdvance }: Props) {
+export function CardReviewBody({ userId, cardId, failed, confirmLabel, onConfirmed }: Props) {
   const [detail, setDetail] = useState<CardDetail | null>(null);
   const [values, setValues] = useState<ContactInput>(() => toContactInput(null));
   const [busy, setBusy] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
+
+  // 離脱時に下書きを保存するため、クリーンアップから最新値を読めるようにしておく
+  const draftRef = useRef<ContactInput | null>(null);
+  const dirtyRef = useRef(false);
 
   const load = useCallback(async () => {
     setErrorMessage('');
     try {
       const loaded = await fetchCard(userId, cardId);
       setDetail(loaded);
-      setValues(toContactInput(loaded.contact));
+      const initial = toContactInput(loaded.contact);
+      setValues(initial);
+      draftRef.current = initial;
+      dirtyRef.current = false;
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : '名刺を読み込めませんでした');
     }
@@ -65,8 +70,27 @@ export function CardReviewScreen({ userId, cardId, position, total, failed, onAd
     void load();
   }, [load]);
 
+  // 名刺を切り替えたときに入力が消えないよう、未保存の変更だけ黙って下書き保存する。
+  // confirm は呼ばないので「確定登録」にはならない。
+  useEffect(() => {
+    return () => {
+      const draft = draftRef.current;
+      if (!dirtyRef.current || !draft) {
+        return;
+      }
+      void saveContact(userId, cardId, draft).catch(() => {
+        // 離脱後なので画面に出す先がない。次に開いたとき元の値が見えるだけで実害はない
+      });
+    };
+  }, [userId, cardId]);
+
   const updateField = (field: ContactField, value: string) => {
-    setValues((current) => ({ ...current, [field]: value }));
+    setValues((current) => {
+      const next = { ...current, [field]: value };
+      draftRef.current = next;
+      dirtyRef.current = true;
+      return next;
+    });
   };
 
   const handleConfirm = async () => {
@@ -75,7 +99,8 @@ export function CardReviewScreen({ userId, cardId, position, total, failed, onAd
     try {
       await saveContact(userId, cardId, values);
       await confirmCard(userId, cardId);
-      onAdvance();
+      dirtyRef.current = false;
+      onConfirmed(cardId);
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : '登録に失敗しました');
     } finally {
@@ -98,7 +123,7 @@ export function CardReviewScreen({ userId, cardId, position, total, failed, onAd
 
   if (!detail) {
     return (
-      <div className="screen screen--center">
+      <div className="waiting">
         <div className="spinner" />
         <p className="lead">名刺を読み込んでいます…</p>
       </div>
@@ -106,15 +131,7 @@ export function CardReviewScreen({ userId, cardId, position, total, failed, onAd
   }
 
   return (
-    <div className="screen screen--form">
-      <p className="progress-note">
-        名刺 {position} / {total}
-      </p>
-
-      <a className="card-image" href={cardImageUrl(cardId)} target="_blank" rel="noreferrer">
-        <img src={cardImageUrl(cardId)} alt={`名刺 ${position} の画像`} />
-      </a>
-
+    <div className="review">
       {failed && (
         <p className="alert alert--warn">
           自動読み取りに失敗しました。画像を見ながら入力するか、「もう一度読み取る」をお試しください。
@@ -138,11 +155,8 @@ export function CardReviewScreen({ userId, cardId, position, total, failed, onAd
       </button>
 
       <div className="action-bar">
-        <button type="button" className="button button--ghost" disabled={Boolean(busy)} onClick={onAdvance}>
-          あとで
-        </button>
         <button type="button" className="button button--primary" disabled={Boolean(busy)} onClick={handleConfirm}>
-          {busy || (position < total ? '登録して次へ' : '登録して完了')}
+          {busy || confirmLabel}
         </button>
       </div>
     </div>
