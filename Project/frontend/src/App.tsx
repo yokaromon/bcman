@@ -21,6 +21,9 @@ export function App() {
   const [users, setUsers] = useState<User[]>([]);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [tab, setTab] = useState<Tab>('capture');
+  // タブを押した回数。key に使い、開いているタブを押し直したときも作り直させる。
+  // 同じタブに setTab しても state が変わらず、途中の画面に留まってしまうため。
+  const [openCount, setOpenCount] = useState(0);
   const [loadError, setLoadError] = useState('');
 
   useEffect(() => {
@@ -35,6 +38,11 @@ export function App() {
     };
     void load();
   }, []);
+
+  const openTab = (next: Tab) => {
+    setTab(next);
+    setOpenCount((count) => count + 1);
+  };
 
   const changeUser = (userId: string) => {
     const selected = users.find((user) => user.id === userId) ?? null;
@@ -64,15 +72,15 @@ export function App() {
 
       <main className="app__main">
         {loadError && <p className="alert alert--error">{loadError}</p>}
-        {tab === 'capture' && <CaptureFlow user={currentUser} />}
-        {tab === 'history' && <HistoryScreen user={currentUser} />}
+        {tab === 'capture' && <CaptureFlow key={openCount} user={currentUser} />}
+        {tab === 'history' && <HistoryScreen key={openCount} user={currentUser} />}
       </main>
 
       <nav className="tabbar">
         <button
           type="button"
           className={tab === 'capture' ? 'tabbar__item tabbar__item--active' : 'tabbar__item'}
-          onClick={() => setTab('capture')}
+          onClick={() => openTab('capture')}
         >
           <span aria-hidden="true">📷</span>
           撮影
@@ -80,7 +88,7 @@ export function App() {
         <button
           type="button"
           className={tab === 'history' ? 'tabbar__item tabbar__item--active' : 'tabbar__item'}
-          onClick={() => setTab('history')}
+          onClick={() => openTab('history')}
         >
           <span aria-hidden="true">🗂</span>
           履歴
