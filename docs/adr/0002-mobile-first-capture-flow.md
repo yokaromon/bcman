@@ -1,0 +1,5 @@
+# Mobile-first capture-to-confirmation flow
+
+The primary way people use this system is standing with a phone and a stack of business cards, so the interface is a single-column sequence — capture, progress, confirm — rather than the browsing grid it started as. After a Photo is uploaded the client polls its Business Cards and shows per-card recognition progress, then moves straight into confirmation as soon as a card is reviewable; confirming one card advances to the next without returning to a list. Browsing past Photos still exists, but on a separate tab so it never sits between the camera and the Contact awaiting confirmation.
+
+Recognition is best-effort, and a failed card must not strand the rest. When the Photo reports failure the client retries each unfinished card once via reprocess; if that retry also fails the card is marked failed and confirmation continues with the remaining cards. A failed card still opens its confirmation screen with the card image and empty fields, because a human transcribing from the image is a better outcome than a dead end.
