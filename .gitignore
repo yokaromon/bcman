@@ -8,3 +8,14 @@
 node_modules/
 dist/
 build/
+*.tsbuildinfo
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+
+# 実行時に生まれるもの。.env は APIキー、DB と storage は名刺の個人情報を含む
+.env
+*.db
+storage/
