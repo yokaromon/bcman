@@ -335,8 +335,13 @@ body {
   max-height: 42vh;
   object-fit: contain;
   background: #f0f2f6;
-  user-select: none;
   -webkit-user-drag: none;
+  /* iOS の Live Text（画像内の文字選択）と長押しメニューがスワイプを横取りするため、
+     画像自体はポインタ対象から外し、タッチは親の .card-image で受ける */
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .card-image__hint {
