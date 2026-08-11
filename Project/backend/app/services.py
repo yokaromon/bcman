@@ -31,11 +31,11 @@ def detect_cards(photo: Photo, db: Session):
     if not candidates: candidates = [(0, 0, width, height)]
     for x, y, w, h in candidates[:10]:
         card = BusinessCard(photo_id=photo.id, detected_image_path="", corrected_image_path="", detection_confidence=.75 if len(candidates) else .2, x=x, y=y, width=w, height=h)
+        db.add(card); db.flush()
         target = settings.storage_dir / "photos" / photo.id / "cards" / card.id; target.mkdir(parents=True, exist_ok=True)
         crop = image[y:y+h, x:x+w]; detected = target / "detected.jpg"; corrected = target / "corrected.jpg"
         cv2.imwrite(str(detected), crop); cv2.imwrite(str(corrected), crop)
         card.detected_image_path, card.corrected_image_path, card.status = str(detected), str(corrected), "corrected"
-        db.add(card)
     photo.status = "detected"; db.commit()
 
 async def chat(messages):
