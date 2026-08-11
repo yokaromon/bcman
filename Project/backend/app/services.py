@@ -1,4 +1,5 @@
 import base64, json, shutil
+from io import BytesIO
 from pathlib import Path
 import cv2
 import httpx
@@ -12,8 +13,22 @@ from .settings import settings
 OCR_PROMPT = "画像内の文字をすべて正確に書き起こしてください。説明や前置きは不要で、本文のみを出力してください。"
 STRUCTURE_PROMPT = """次のOCR原文から名刺情報をJSONだけで抽出してください。原文にない情報はnull。電話、FAX、携帯を区別してください。キーは company_name, company_name_kana, department, position, person_name, person_name_kana, postal_code, address, telephone, fax, mobile, email, website, notes です。\n\nOCR原文:\n"""
 
+OCR_MAX_EDGE = 1600
+OCR_JPEG_QUALITY = 85
+
 def image_size(path: Path):
     with Image.open(path) as image: return image.size
+
+def encode_for_ocr(path: Path) -> str:
+    """OCR APIへ送るJPEGをBase64で返す。長辺を抑えるのは、素の切り抜き画像(数MB)を
+    Base64化するとリクエストが app.ykr.ltd 側 nginx の上限(既定1MB)を超えて 413 になるため。
+    名刺の文字は1600px あれば読めるので、保存済みの原本・切り抜きはそのまま残す。"""
+    with Image.open(path) as image:
+        prepared = image.convert("RGB")
+        prepared.thumbnail((OCR_MAX_EDGE, OCR_MAX_EDGE))
+        buffer = BytesIO()
+        prepared.save(buffer, format="JPEG", quality=OCR_JPEG_QUALITY)
+    return base64.b64encode(buffer.getvalue()).decode()
 
 def detect_cards(photo: Photo, db: Session):
     source = Path(photo.storage_path)
@@ -42,14 +57,15 @@ async def chat(messages):
     if not settings.ai_api_key or not settings.ai_model: raise ValueError("AI_API_KEY と AI_MODEL を .env に設定してください")
     async with httpx.AsyncClient(timeout=90) as client:
         response = await client.post(f"{settings.ai_base_url.rstrip('/')}/chat/completions", headers={"Authorization": f"Bearer {settings.ai_api_key}"}, json={"model": settings.ai_model, "messages": messages, "temperature": 0})
-        response.raise_for_status(); data = response.json()
+        # raise_for_status のままだと画面には「失敗」としか出ず、原因調査がログ頼みになる
+        if response.is_error: raise ValueError(f"AI APIがHTTP {response.status_code} を返しました: {response.text[:200]}")
+        data = response.json()
     return data["choices"][0]["message"]["content"], data
 
 async def run_ocr(card: BusinessCard, db: Session):
     card.status = "ocr_processing"; db.commit()
-    suffix = Path(card.corrected_image_path).suffix or ".jpg"; mime = "image/png" if suffix.lower()==".png" else "image/jpeg"
-    encoded = base64.b64encode(Path(card.corrected_image_path).read_bytes()).decode()
-    text, response = await chat([{"role":"user","content":[{"type":"text","text":OCR_PROMPT},{"type":"image_url","image_url":{"url":f"data:{mime};base64,{encoded}"}}]}])
+    encoded = encode_for_ocr(Path(card.corrected_image_path))
+    text, response = await chat([{"role":"user","content":[{"type":"text","text":OCR_PROMPT},{"type":"image_url","image_url":{"url":f"data:image/jpeg;base64,{encoded}"}}]}])
     db.add(OCRResult(card_id=card.id, engine="ykr-multimodal", engine_version=settings.ai_model, raw_text=text, raw_json=response))
     db.add(ProcessingHistory(card_id=card.id, process_type="ocr", engine="ykr-multimodal", version=settings.ai_model, input_json={"prompt":OCR_PROMPT}, output_json={"raw_text":text}))
     card.status = "ocr_completed"; db.commit()

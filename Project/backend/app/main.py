@@ -94,9 +94,17 @@ def card(card_id: str, db: Session=Depends(get_db), user: User=Depends(current_u
 @app.get("/api/cards/{card_id}/image")
 def card_image(card_id: str, db: Session=Depends(get_db), user: User=Depends(current_user)): return FileResponse(card_for_user(card_id,db,user).corrected_image_path)
 @app.post("/api/cards/{card_id}/ocr")
-async def ocr(card_id: str, db: Session=Depends(get_db), user: User=Depends(current_user)): c=card_for_user(card_id,db,user); await run_ocr(c,db); return {"status":c.status}
+async def ocr(card_id: str, db: Session=Depends(get_db), user: User=Depends(current_user)):
+    c=card_for_user(card_id,db,user)
+    try: await run_ocr(c,db)
+    except ValueError as exc: raise HTTPException(502, str(exc)) from exc
+    return {"status":c.status}
 @app.post("/api/cards/{card_id}/structure")
-async def struct(card_id: str, db: Session=Depends(get_db), user: User=Depends(current_user)): c=card_for_user(card_id,db,user); await structure(c,db); return {"status":c.status}
+async def struct(card_id: str, db: Session=Depends(get_db), user: User=Depends(current_user)):
+    c=card_for_user(card_id,db,user)
+    try: await structure(c,db)
+    except ValueError as exc: raise HTTPException(502, str(exc)) from exc
+    return {"status":c.status}
 @app.put("/api/cards/{card_id}/contact")
 def save_contact(card_id: str, body: ContactInput, db: Session=Depends(get_db), user: User=Depends(current_user)):
     c=card_for_user(card_id,db,user); contact=db.query(Contact).filter_by(card_id=c.id).first() or Contact(card_id=c.id)
@@ -110,6 +118,8 @@ def confirm(card_id: str, db: Session=Depends(get_db), user: User=Depends(curren
 @app.post("/api/cards/{card_id}/reprocess")
 async def reprocess(card_id: str, body: ReprocessInput, db: Session=Depends(get_db), user: User=Depends(current_user)):
     c=card_for_user(card_id,db,user)
-    if body.ocr: await run_ocr(c,db)
-    if body.llm: await structure(c,db)
+    try:
+        if body.ocr: await run_ocr(c,db)
+        if body.llm: await structure(c,db)
+    except ValueError as exc: raise HTTPException(502, str(exc)) from exc
     return {"status":c.status}
