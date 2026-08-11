@@ -1,0 +1,24 @@
+[tool.poetry]
+name = "bcman-backend"
+version = "0.1.0"
+description = "Business card management PoC"
+authors = ["BCMan"]
+package-mode = false
+
+[tool.poetry.dependencies]
+python = "^3.11"
+fastapi = "^0.115.0"
+uvicorn = {extras = ["standard"], version = "^0.30.0"}
+sqlalchemy = "^2.0.0"
+pydantic-settings = "^2.5.0"
+python-multipart = "^0.0.12"
+pillow = "^10.4.0"
+httpx = "^0.27.0"
+opencv-python-headless = "^4.10.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3.0"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
