@@ -6,7 +6,15 @@ class OrganizationInput(BaseModel):
     name: str
     sharing_mode: str = Field(pattern="^(isolated|shared)$")
 class GroupInput(BaseModel): name: str
-class UserInput(BaseModel): name: str; group_id: str | None = None; role: str = "member"
+class UserInput(BaseModel):
+    username: str
+    name: str
+    password: str = Field(min_length=12)
+    group_ids: list[str] = Field(min_length=1)
+    role: str = Field(default="member", pattern="^(admin|member)$")
+class LoginInput(BaseModel): username: str; password: str
+class TotpInput(BaseModel): code: str
+class PasswordResetInput(BaseModel): password: str = Field(min_length=12)
 class ContactInput(BaseModel):
     company_name: str | None = None; company_name_kana: str | None = None
     department: str | None = None; position: str | None = None

@@ -7,7 +7,7 @@ import {
   startProcessing,
   uploadPhoto,
   type CardSummary,
-  type User,
+  type Me,
 } from './api';
 import { CaptureScreen } from './components/CaptureScreen';
 import { ProcessingScreen } from './components/ProcessingScreen';
@@ -26,7 +26,7 @@ function describeError(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback;
 }
 
-export function CaptureFlow({ user }: { user: User | null }) {
+export function CaptureFlow({ user }: { user: Me | null }) {
   const [phase, setPhase] = useState<Phase>('idle');
   const [photoId, setPhotoId] = useState('');
   const [cards, setCards] = useState<CardSummary[]>([]);
@@ -35,16 +35,15 @@ export function CaptureFlow({ user }: { user: User | null }) {
   const [failedCardIds, setFailedCardIds] = useState<Set<string>>(new Set());
   const [fatalMessage, setFatalMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
+  // 複数グループに所属する利用者は、撮影のたびにどのグループへ登録するか選ぶ
+  const [groupId, setGroupId] = useState(user?.groups[0]?.id ?? '');
 
   // ポーリングのループ内から参照するため、再レンダリングに巻き込まれない実体を持つ
   const retriedRef = useRef<Set<string>>(new Set());
   const failedRef = useRef<Set<string>>(new Set());
 
-  const userId = user?.id ?? '';
-  const canUpload = Boolean(user && user.organization_id && user.group_id);
-  const blockedReason = user
-    ? '組織とグループに所属している利用者を選んでください。'
-    : '利用者を選んでください。';
+  const canUpload = Boolean(user && groupId);
+  const blockedReason = user ? '所属グループがありません。管理者にお問い合わせください。' : 'ログインしてください。';
 
   const restart = useCallback(() => {
     retriedRef.current = new Set();
@@ -63,8 +62,8 @@ export function CaptureFlow({ user }: { user: User | null }) {
     setPhase('uploading');
     setErrorMessage('');
     try {
-      const uploadedId = await uploadPhoto(userId, file);
-      await startProcessing(userId, uploadedId);
+      const uploadedId = await uploadPhoto(groupId, file);
+      await startProcessing(uploadedId);
       setPhotoId(uploadedId);
       setPhase('tracking');
     } catch (error) {
@@ -94,7 +93,7 @@ export function CaptureFlow({ user }: { user: User | null }) {
         }
         retriedRef.current.add(card.id);
         try {
-          await reprocessCard(userId, card.id);
+          await reprocessCard(card.id);
         } catch {
           failedRef.current.add(card.id);
           syncFailed();
@@ -103,9 +102,9 @@ export function CaptureFlow({ user }: { user: User | null }) {
     };
 
     const pollOnce = async (): Promise<boolean> => {
-      const photos = await fetchPhotos(userId);
+      const photos = await fetchPhotos();
       const photo = photos.find((item) => item.id === photoId);
-      const currentCards = await fetchCards(userId, photoId);
+      const currentCards = await fetchCards(photoId);
       setCards(currentCards);
 
       const photoFailed = photo?.status === 'failed';
@@ -161,7 +160,7 @@ export function CaptureFlow({ user }: { user: User | null }) {
     return () => {
       cancelled = true;
     };
-  }, [phase, photoId, userId]);
+  }, [phase, photoId]);
 
   // 登録し終えたら残りの未登録へ送る。最後のページかどうかではなく、
   // 未登録が尽きたことをもって完了とする。
@@ -201,6 +200,9 @@ export function CaptureFlow({ user }: { user: User | null }) {
         busyMessage={phase === 'uploading' ? '写真を送っています…' : ''}
         errorMessage={errorMessage}
         onPick={handlePick}
+        groups={user?.groups ?? []}
+        groupId={groupId}
+        onGroupChange={setGroupId}
       />
     );
   }
@@ -225,7 +227,6 @@ export function CaptureFlow({ user }: { user: User | null }) {
   // 範囲外を指して空白画面になるのを防ぐため。
   return (
     <CardPager
-      userId={userId}
       cards={cards}
       index={Math.min(reviewIndex, cards.length - 1)}
       failedCardIds={failedCardIds}

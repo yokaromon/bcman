@@ -21,12 +21,57 @@ class Group(Base):
     name: Mapped[str] = mapped_column(String)
 
 class User(Base):
+    """1ユーザは生涯にわたって単一の Organization に属する。所属 Group は
+    UserGroup 側の多対多で、Organization を跨ぐ所属はない前提（docs/identity/CONTEXT.md）。"""
     __tablename__ = "users"
     id: Mapped[str] = mapped_column(String, primary_key=True, default=uid)
-    organization_id: Mapped[str | None] = mapped_column(ForeignKey("organizations.id"), nullable=True, index=True)
-    group_id: Mapped[str | None] = mapped_column(ForeignKey("groups.id"), nullable=True, index=True)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
+    username: Mapped[str] = mapped_column(String, unique=True, index=True)
     name: Mapped[str] = mapped_column(String)
-    role: Mapped[str] = mapped_column(String, default="member")
+    role: Mapped[str] = mapped_column(String, default="member")  # "admin" | "member"
+    password_hash: Mapped[str] = mapped_column(String)
+    totp_secret: Mapped[str] = mapped_column(String)
+    failed_login_count: Mapped[int] = mapped_column(Integer, default=0)
+    locked_until: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now)
+
+class UserGroup(Base):
+    """User と Group の多対多所属。isolated モードでの閲覧範囲はここに属する全 Group の和集合。"""
+    __tablename__ = "user_groups"
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=uid)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    group_id: Mapped[str] = mapped_column(ForeignKey("groups.id"), index=True)
+
+class LoginSession(Base):
+    """ログイン成功後のセッション。トークンそのものではなくハッシュを保持し、
+    Cookie が漏れてもDBダンプだけからは再利用できないようにする。"""
+    __tablename__ = "login_sessions"
+    token_hash: Mapped[str] = mapped_column(String, primary_key=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime, default=now)
+
+class PendingLogin(Base):
+    """ID・パスワード確認後、TOTPコード入力を待つ間だけ存在する短命の状態。
+    未知端末・指定IP外のログインでのみ発生する（app/auth.py）。"""
+    __tablename__ = "pending_logins"
+    token_hash: Mapped[str] = mapped_column(String, primary_key=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now)
+    expires_at: Mapped[datetime] = mapped_column(DateTime)
+
+class TrustedDevice(Base):
+    """TOTPを一度通過した端末の記憶。90日で自動失効し、revoked_at があれば
+    それより前倒しで即時失効（紛失時に管理者が使う）。"""
+    __tablename__ = "trusted_devices"
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=uid)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    token_hash: Mapped[str] = mapped_column(String, unique=True, index=True)
+    label: Mapped[str] = mapped_column(String, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now)
+    last_used_at: Mapped[datetime] = mapped_column(DateTime, default=now)
+    expires_at: Mapped[datetime] = mapped_column(DateTime)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 class Photo(Base):
     __tablename__ = "photos"

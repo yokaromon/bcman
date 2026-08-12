@@ -34,14 +34,13 @@ const FIELDS: FieldConfig[] = [
 ];
 
 type Props = {
-  userId: string;
   cardId: string;
   failed: boolean;
   confirmLabel: string;
   onConfirmed: (cardId: string) => void;
 };
 
-export function CardReviewBody({ userId, cardId, failed, confirmLabel, onConfirmed }: Props) {
+export function CardReviewBody({ cardId, failed, confirmLabel, onConfirmed }: Props) {
   const [detail, setDetail] = useState<CardDetail | null>(null);
   const [values, setValues] = useState<ContactInput>(() => toContactInput(null));
   const [busy, setBusy] = useState('');
@@ -54,7 +53,7 @@ export function CardReviewBody({ userId, cardId, failed, confirmLabel, onConfirm
   const load = useCallback(async () => {
     setErrorMessage('');
     try {
-      const loaded = await fetchCard(userId, cardId);
+      const loaded = await fetchCard(cardId);
       setDetail(loaded);
       const initial = toContactInput(loaded.contact);
       setValues(initial);
@@ -63,7 +62,7 @@ export function CardReviewBody({ userId, cardId, failed, confirmLabel, onConfirm
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : '名刺を読み込めませんでした');
     }
-  }, [userId, cardId]);
+  }, [cardId]);
 
   useEffect(() => {
     setDetail(null);
@@ -78,11 +77,11 @@ export function CardReviewBody({ userId, cardId, failed, confirmLabel, onConfirm
       if (!dirtyRef.current || !draft) {
         return;
       }
-      void saveContact(userId, cardId, draft).catch(() => {
+      void saveContact(cardId, draft).catch(() => {
         // 離脱後なので画面に出す先がない。次に開いたとき元の値が見えるだけで実害はない
       });
     };
-  }, [userId, cardId]);
+  }, [cardId]);
 
   const updateField = (field: ContactField, value: string) => {
     setValues((current) => {
@@ -97,8 +96,8 @@ export function CardReviewBody({ userId, cardId, failed, confirmLabel, onConfirm
     setBusy('登録しています…');
     setErrorMessage('');
     try {
-      await saveContact(userId, cardId, values);
-      await confirmCard(userId, cardId);
+      await saveContact(cardId, values);
+      await confirmCard(cardId);
       dirtyRef.current = false;
       onConfirmed(cardId);
     } catch (error) {
@@ -112,7 +111,7 @@ export function CardReviewBody({ userId, cardId, failed, confirmLabel, onConfirm
     setBusy('もう一度読み取っています…');
     setErrorMessage('');
     try {
-      await reprocessCard(userId, cardId);
+      await reprocessCard(cardId);
       await load();
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : '再解析に失敗しました');

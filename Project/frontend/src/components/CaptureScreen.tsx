@@ -1,4 +1,5 @@
 import { useRef, type ChangeEvent } from 'react';
+import type { Group } from '../api';
 
 type Props = {
   canUpload: boolean;
@@ -6,9 +7,21 @@ type Props = {
   busyMessage: string;
   errorMessage: string;
   onPick: (file: File) => void;
+  groups: Group[];
+  groupId: string;
+  onGroupChange: (groupId: string) => void;
 };
 
-export function CaptureScreen({ canUpload, blockedReason, busyMessage, errorMessage, onPick }: Props) {
+export function CaptureScreen({
+  canUpload,
+  blockedReason,
+  busyMessage,
+  errorMessage,
+  onPick,
+  groups,
+  groupId,
+  onGroupChange,
+}: Props) {
   const cameraInput = useRef<HTMLInputElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
 
@@ -41,6 +54,23 @@ export function CaptureScreen({ canUpload, blockedReason, busyMessage, errorMess
 
       {errorMessage && <p className="alert alert--error">{errorMessage}</p>}
       {!canUpload && <p className="alert alert--warn">{blockedReason}</p>}
+
+      {groups.length > 1 && (
+        <label className="field">
+          <span className="field__label">登録先グループ</span>
+          <select
+            className="field__input"
+            value={groupId}
+            onChange={(event) => onGroupChange(event.target.value)}
+          >
+            {groups.map((group) => (
+              <option key={group.id} value={group.id}>
+                {group.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
 
       <input
         ref={cameraInput}

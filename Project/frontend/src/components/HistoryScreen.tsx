@@ -7,8 +7,8 @@ import {
   fetchPhotos,
   photoThumbnailUrl,
   type CardSummary,
+  type Me,
   type PhotoSummary,
-  type User,
 } from '../api';
 import { CardPager } from './CardPager';
 import { ConfirmButton } from './ConfirmButton';
@@ -49,7 +49,7 @@ function describePhotoDeletion(cards: CardSummary[]): string {
   return `名刺 ${cards.length}枚（${registered}）も一緒に削除します。元に戻せません。`;
 }
 
-export function HistoryScreen({ user }: { user: User | null }) {
+export function HistoryScreen({ user }: { user: Me | null }) {
   const [photos, setPhotos] = useState<PhotoSummary[]>([]);
   const [openPhoto, setOpenPhoto] = useState<PhotoSummary | null>(null);
   const [cards, setCards] = useState<CardSummary[]>([]);
@@ -57,23 +57,21 @@ export function HistoryScreen({ user }: { user: User | null }) {
   const [errorMessage, setErrorMessage] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const userId = user?.id ?? '';
-
   const loadPhotos = useCallback(async () => {
-    if (!userId) {
+    if (!user) {
       setPhotos([]);
       return;
     }
     setLoading(true);
     setErrorMessage('');
     try {
-      setPhotos(await fetchPhotos(userId));
+      setPhotos(await fetchPhotos());
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : '写真を読み込めませんでした');
     } finally {
       setLoading(false);
     }
-  }, [userId]);
+  }, [user]);
 
   useEffect(() => {
     setOpenPhoto(null);
@@ -84,7 +82,7 @@ export function HistoryScreen({ user }: { user: User | null }) {
   const openPhotoCards = async (photo: PhotoSummary) => {
     setErrorMessage('');
     try {
-      setCards(await fetchCards(userId, photo.id));
+      setCards(await fetchCards(photo.id));
       setOpenPhoto(photo);
       setOpenCardIndex(-1);
     } catch (error) {
@@ -94,7 +92,7 @@ export function HistoryScreen({ user }: { user: User | null }) {
 
   const reloadCards = async (photoId: string) => {
     try {
-      setCards(await fetchCards(userId, photoId));
+      setCards(await fetchCards(photoId));
     } catch {
       // 一覧の状態表示が古いままになるだけなので、閲覧は続けられる
     }
@@ -103,7 +101,7 @@ export function HistoryScreen({ user }: { user: User | null }) {
   const removePhoto = async (photo: PhotoSummary) => {
     setErrorMessage('');
     try {
-      await deletePhoto(userId, photo.id);
+      await deletePhoto(photo.id);
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : '写真を削除できませんでした');
       return;
@@ -130,7 +128,6 @@ export function HistoryScreen({ user }: { user: User | null }) {
           ← 名刺一覧へ
         </button>
         <CardPager
-          userId={userId}
           cards={cards}
           index={openCardIndex}
           failedCardIds={NO_FAILURES}

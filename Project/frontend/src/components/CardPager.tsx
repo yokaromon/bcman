@@ -10,7 +10,6 @@ const SWIPE_HORIZONTAL_RATIO = 1.5;
 const MAX_DOTS = 8;
 
 type Props = {
-  userId: string;
   cards: CardSummary[];
   index: number;
   failedCardIds: Set<string>;
@@ -22,7 +21,6 @@ type Props = {
 };
 
 export function CardPager({
-  userId,
   cards,
   index,
   failedCardIds,
@@ -82,7 +80,7 @@ export function CardPager({
   const remove = async () => {
     setErrorMessage('');
     try {
-      await deleteCard(userId, card.id);
+      await deleteCard(card.id);
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : '名刺を削除できませんでした');
       return;
@@ -137,7 +135,6 @@ export function CardPager({
       {showForm ? (
         <CardReviewBody
           key={card.id}
-          userId={userId}
           cardId={card.id}
           failed={failed}
           confirmLabel={confirmLabel}

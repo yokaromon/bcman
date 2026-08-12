@@ -1,13 +1,14 @@
 import shutil
 from pathlib import Path
-from fastapi import BackgroundTasks, Depends, FastAPI, File, Header, HTTPException, UploadFile
+from fastapi import BackgroundTasks, Depends, FastAPI, File, HTTPException, Request, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from sqlalchemy import func
 from sqlalchemy.orm import Session
+from . import auth
 from .database import Base, SessionLocal, engine, get_db
-from .models import AuditLog, BusinessCard, Contact, Group, OCRResult, Organization, Photo, User
-from .schemas import ContactInput, GroupInput, OrganizationInput, ReprocessInput, UserInput
+from .models import AuditLog, BusinessCard, Contact, Group, OCRResult, Organization, Photo, TrustedDevice, User, UserGroup
+from .schemas import ContactInput, GroupInput, LoginInput, OrganizationInput, PasswordResetInput, ReprocessInput, TotpInput, UserInput
 from .services import card_thumbnail, delete_card, delete_photo, detect_cards, image_size, photo_thumbnail, process_photo, run_ocr, structure
 from .settings import settings
 
@@ -16,28 +17,25 @@ from .settings import settings
 THUMBNAIL_CACHE_CONTROL = "private, max-age=604800"
 
 app = FastAPI(title="BCMan API", root_path=settings.root_path)
-app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173"], allow_methods=["*"], allow_headers=["*"])
+app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173"], allow_methods=["*"], allow_headers=["*"], allow_credentials=True)
 
 def bootstrap():
+    """Organization・初期管理者の作成はアプリ外（scripts/create_org.py）で行う。
+    ここではテーブル作成のみ。"""
     Base.metadata.create_all(engine); settings.storage_dir.mkdir(parents=True, exist_ok=True)
-    with SessionLocal() as db:
-        if not db.query(User).first():
-            org = Organization(name="サンプル組織", sharing_mode="isolated"); db.add(org); db.flush()
-            group = Group(organization_id=org.id, name="一般"); db.add(group); db.flush()
-            db.add(User(name="システム管理者", role="system_admin")); db.add(User(name="組織管理者", organization_id=org.id, group_id=group.id, role="org_admin")); db.commit()
 @app.on_event("startup")
 def startup(): bootstrap()
 
-def current_user(x_user_id: str | None = Header(default=None), db: Session = Depends(get_db)):
-    user = db.get(User, x_user_id) if x_user_id else db.query(User).filter_by(role="system_admin").first()
-    if not user: raise HTTPException(401, "利用者が見つかりません")
-    return user
-def visible_photo_query(db, user):
-    query = db.query(Photo)
-    if user.role == "system_admin": return query
+current_user = auth.current_user
+require_admin = auth.require_admin
+
+def user_group_ids(db: Session, user: User) -> list[str]:
+    return [row.group_id for row in db.query(UserGroup).filter_by(user_id=user.id)]
+def visible_photo_query(db: Session, user: User):
+    query = db.query(Photo).filter(Photo.organization_id == user.organization_id)
     org = db.get(Organization, user.organization_id)
-    if not org: raise HTTPException(403, "組織に所属していません")
-    return query.filter(Photo.organization_id == user.organization_id) if user.role == "org_admin" or org.sharing_mode == "shared" else query.filter(Photo.group_id == user.group_id)
+    if user.role == "admin" or org.sharing_mode == "shared": return query
+    return query.filter(Photo.group_id.in_(user_group_ids(db, user)))
 def card_for_user(card_id, db, user):
     card = db.get(BusinessCard, card_id)
     if not card or not visible_photo_query(db, user).filter(Photo.id == card.photo_id).first(): raise HTTPException(404, "名刺が見つかりません")
@@ -49,34 +47,130 @@ def thumbnail_response(build):
     try: path = build()
     except (FileNotFoundError, OSError) as exc: raise HTTPException(404, "画像がありません") from exc
     return FileResponse(path, headers={"Cache-Control": THUMBNAIL_CACHE_CONTROL})
+def require_group_in_org(db: Session, org_id: str, group_ids: list[str]):
+    found = db.query(Group).filter(Group.organization_id == org_id, Group.id.in_(group_ids)).count()
+    if found != len(set(group_ids)): raise HTTPException(400, "指定したグループがこの組織にありません")
 
 @app.get("/api/health")
 def health(): return {"status":"ok"}
-@app.get("/api/bootstrap")
-def bootstrap_data(db: Session=Depends(get_db)): return {"users":[{"id":u.id,"name":u.name,"role":u.role,"organization_id":u.organization_id,"group_id":u.group_id} for u in db.query(User)], "organizations":[{"id":o.id,"name":o.name,"sharing_mode":o.sharing_mode} for o in db.query(Organization)], "groups":[{"id":g.id,"organization_id":g.organization_id,"name":g.name} for g in db.query(Group)]}
-@app.post("/api/organizations")
-def create_org(body: OrganizationInput, db: Session=Depends(get_db), user: User=Depends(current_user)):
-    if user.role != "system_admin": raise HTTPException(403, "システム管理者のみ")
-    org=Organization(**body.model_dump()); db.add(org); db.commit(); db.refresh(org); return org
+
+# --- 認証 ---
+
+@app.post("/api/auth/login")
+def login(body: LoginInput, request: Request, response: Response, db: Session=Depends(get_db)):
+    user = db.query(User).filter_by(username=body.username).first()
+    if not user:
+        # ID自体が存在しない場合も所要時間・応答を揃え、IDの実在を推測させない
+        raise HTTPException(401, "IDまたはパスワードが違います")
+    auth.check_not_locked(user)
+    if not auth.verify_password(body.password, user.password_hash):
+        auth.register_failure(db, user); raise HTTPException(401, "IDまたはパスワードが違います")
+    auth.register_success(db, user)
+    device = auth.find_trusted_device(db, user, request)
+    if device: device.last_used_at = auth.now(); db.commit()
+    if auth.is_trusted_network(request) or device:
+        auth.issue_session(db, user, response); return {"status":"ok"}
+    auth.issue_pending_login(db, user, response); return {"status":"totp_required"}
+
+@app.post("/api/auth/verify-totp")
+def verify_totp(body: TotpInput, request: Request, response: Response, db: Session=Depends(get_db)):
+    user = auth.resolve_pending_login(db, request)
+    auth.check_not_locked(user)
+    if not auth.verify_totp(user.totp_secret, body.code):
+        auth.register_failure(db, user); raise HTTPException(401, "コードが違います")
+    auth.register_success(db, user)
+    auth.clear_pending_login(request, response, db)
+    auth.issue_trusted_device(db, user, request, response)
+    auth.issue_session(db, user, response)
+    return {"status":"ok"}
+
+@app.post("/api/auth/logout")
+def logout(request: Request, response: Response, db: Session=Depends(get_db)):
+    auth.clear_session(request, response, db); return {"status":"ok"}
+
+@app.get("/api/auth/me")
+def me(db: Session=Depends(get_db), user: User=Depends(current_user)):
+    org = db.get(Organization, user.organization_id)
+    groups = db.query(Group).join(UserGroup, UserGroup.group_id == Group.id).filter(UserGroup.user_id == user.id).all()
+    return {"id":user.id,"username":user.username,"name":user.name,"role":user.role,"organization_id":user.organization_id,"sharing_mode":org.sharing_mode if org else None,"groups":[{"id":g.id,"name":g.name} for g in groups]}
+
+# --- 組織・グループ・ユーザ管理（Organization管理者のみ。Organization自体の新規作成はシェルスクリプトで行う） ---
+
 @app.put("/api/organizations/{org_id}")
-def update_org(org_id: str, body: OrganizationInput, db: Session=Depends(get_db), user: User=Depends(current_user)):
-    org=db.get(Organization, org_id)
-    if not org or user.role not in ("system_admin", "org_admin") or user.role=="org_admin" and user.organization_id!=org_id: raise HTTPException(403, "権限がありません")
-    org.name, org.sharing_mode=body.name, body.sharing_mode; db.commit(); return org
+def update_org(org_id: str, body: OrganizationInput, db: Session=Depends(get_db), user: User=Depends(require_admin)):
+    if user.organization_id != org_id: raise HTTPException(403, "権限がありません")
+    org = db.get(Organization, org_id)
+    if not org: raise HTTPException(404, "組織が見つかりません")
+    org.name, org.sharing_mode = body.name, body.sharing_mode; db.commit(); return org
+@app.get("/api/organizations/{org_id}/groups")
+def list_groups(org_id: str, db: Session=Depends(get_db), user: User=Depends(require_admin)):
+    if user.organization_id != org_id: raise HTTPException(403, "権限がありません")
+    return db.query(Group).filter_by(organization_id=org_id).all()
 @app.post("/api/organizations/{org_id}/groups")
-def create_group(org_id: str, body: GroupInput, db: Session=Depends(get_db), user: User=Depends(current_user)):
-    if user.role not in ("system_admin","org_admin") or user.role=="org_admin" and user.organization_id!=org_id: raise HTTPException(403, "権限がありません")
+def create_group(org_id: str, body: GroupInput, db: Session=Depends(get_db), user: User=Depends(require_admin)):
+    if user.organization_id != org_id: raise HTTPException(403, "権限がありません")
     item=Group(organization_id=org_id, **body.model_dump()); db.add(item); db.commit(); return item
+@app.get("/api/organizations/{org_id}/users")
+def list_users(org_id: str, db: Session=Depends(get_db), user: User=Depends(require_admin)):
+    if user.organization_id != org_id: raise HTTPException(403, "権限がありません")
+    users = db.query(User).filter_by(organization_id=org_id).all()
+    return [{"id":u.id,"username":u.username,"name":u.name,"role":u.role,"groups":[g.id for g in db.query(Group).join(UserGroup, UserGroup.group_id==Group.id).filter(UserGroup.user_id==u.id)]} for u in users]
 @app.post("/api/organizations/{org_id}/users")
-def create_user(org_id: str, body: UserInput, db: Session=Depends(get_db), user: User=Depends(current_user)):
-    if user.role not in ("system_admin","org_admin") or user.role=="org_admin" and user.organization_id!=org_id: raise HTTPException(403, "権限がありません")
-    item=User(organization_id=org_id, **body.model_dump()); db.add(item); db.commit(); return item
+def create_user(org_id: str, body: UserInput, db: Session=Depends(get_db), user: User=Depends(require_admin)):
+    if user.organization_id != org_id: raise HTTPException(403, "権限がありません")
+    require_group_in_org(db, org_id, body.group_ids)
+    if db.query(User).filter_by(username=body.username).first(): raise HTTPException(409, "そのIDは既に使われています")
+    secret = auth.generate_totp_secret()
+    item = User(organization_id=org_id, username=body.username, name=body.name, role=body.role, password_hash=auth.hash_password(body.password), totp_secret=secret)
+    db.add(item); db.flush()
+    for group_id in set(body.group_ids): db.add(UserGroup(user_id=item.id, group_id=group_id))
+    db.commit()
+    return {"id":item.id,"username":item.username,"totp_provisioning_uri":auth.totp_provisioning_uri(secret, item.username)}
+def target_user_in_org(db: Session, org_id: str, user_id: str) -> User:
+    target = db.get(User, user_id)
+    if not target or target.organization_id != org_id: raise HTTPException(404, "利用者が見つかりません")
+    return target
+@app.put("/api/organizations/{org_id}/users/{user_id}/password")
+def reset_password(org_id: str, user_id: str, body: PasswordResetInput, db: Session=Depends(get_db), admin: User=Depends(require_admin)):
+    if admin.organization_id != org_id: raise HTTPException(403, "権限がありません")
+    target = target_user_in_org(db, org_id, user_id)
+    target.password_hash = auth.hash_password(body.password); db.commit(); return {"reset":True}
+@app.post("/api/organizations/{org_id}/users/{user_id}/reset-totp")
+def reset_totp(org_id: str, user_id: str, db: Session=Depends(get_db), admin: User=Depends(require_admin)):
+    if admin.organization_id != org_id: raise HTTPException(403, "権限がありません")
+    target = target_user_in_org(db, org_id, user_id)
+    secret = auth.generate_totp_secret(); target.totp_secret = secret; db.commit()
+    return {"totp_provisioning_uri":auth.totp_provisioning_uri(secret, target.username)}
+@app.post("/api/organizations/{org_id}/users/{user_id}/unlock")
+def unlock_user(org_id: str, user_id: str, db: Session=Depends(get_db), admin: User=Depends(require_admin)):
+    if admin.organization_id != org_id: raise HTTPException(403, "権限がありません")
+    target = target_user_in_org(db, org_id, user_id)
+    target.failed_login_count, target.locked_until = 0, None; db.commit(); return {"unlocked":True}
+
+# --- 端末管理（Organization管理者のみ） ---
+
+@app.get("/api/organizations/{org_id}/users/{user_id}/devices")
+def list_devices(org_id: str, user_id: str, db: Session=Depends(get_db), admin: User=Depends(require_admin)):
+    if admin.organization_id != org_id: raise HTTPException(403, "権限がありません")
+    target = db.get(User, user_id)
+    if not target or target.organization_id != org_id: raise HTTPException(404, "利用者が見つかりません")
+    devices = db.query(TrustedDevice).filter_by(user_id=user_id).order_by(TrustedDevice.created_at.desc()).all()
+    return [{"id":d.id,"label":d.label,"created_at":d.created_at,"last_used_at":d.last_used_at,"expires_at":d.expires_at,"revoked":d.revoked_at is not None} for d in devices]
+@app.delete("/api/organizations/{org_id}/devices/{device_id}")
+def revoke_device(org_id: str, device_id: str, db: Session=Depends(get_db), admin: User=Depends(require_admin)):
+    if admin.organization_id != org_id: raise HTTPException(403, "権限がありません")
+    device = db.get(TrustedDevice, device_id)
+    if not device or db.get(User, device.user_id).organization_id != org_id: raise HTTPException(404, "端末が見つかりません")
+    device.revoked_at = auth.now(); db.commit(); return {"revoked":True}
+
+# --- 名刺 ---
 
 @app.post("/api/photos")
-async def upload_photo(file: UploadFile=File(...), db: Session=Depends(get_db), user: User=Depends(current_user)):
-    if user.role == "system_admin" or not user.organization_id or not user.group_id: raise HTTPException(400, "組織とグループを持つ利用者を選択してください")
+async def upload_photo(group_id: str, file: UploadFile=File(...), db: Session=Depends(get_db), user: User=Depends(current_user)):
+    allowed_groups = {g.id for g in db.query(Group).filter_by(organization_id=user.organization_id)} if user.role == "admin" else set(user_group_ids(db, user))
+    if group_id not in allowed_groups: raise HTTPException(400, "アップロード先のグループを正しく選択してください")
     if file.content_type not in {"image/jpeg","image/png"}: raise HTTPException(415, "JPEG または PNG のみ対応")
-    photo=Photo(organization_id=user.organization_id, group_id=user.group_id, original_filename=file.filename or "upload", storage_path=""); db.add(photo); db.flush()
+    photo=Photo(organization_id=user.organization_id, group_id=group_id, original_filename=file.filename or "upload", storage_path=""); db.add(photo); db.flush()
     target=settings.storage_dir/"photos"/photo.id; target.mkdir(parents=True); path=target/("original.png" if file.content_type=="image/png" else "original.jpg")
     with path.open("wb") as out: shutil.copyfileobj(file.file, out)
     if path.stat().st_size > settings.max_upload_bytes: path.unlink(); raise HTTPException(413, "20MBを超えています")

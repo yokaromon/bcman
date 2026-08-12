@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     ai_api_key: str = ""
     ai_model: str = ""
     max_upload_bytes: int = 20 * 1024 * 1024
+    cookie_secure: bool = True  # ローカルでHTTPS無しに動かす時だけ .env で false にする
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 settings = Settings()

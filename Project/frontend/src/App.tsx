@@ -1,42 +1,33 @@
 import { useEffect, useState } from 'react';
-import { fetchBootstrap, type User } from './api';
+import { fetchMe, logout, type Me } from './api';
 import { CaptureFlow } from './CaptureFlow';
+import { AdminScreen } from './components/AdminScreen';
 import { HistoryScreen } from './components/HistoryScreen';
+import { LoginScreen } from './components/LoginScreen';
 
-const STORED_USER_KEY = 'bcman.userId';
-
-type Tab = 'capture' | 'history';
-
-/** 撮影できるのは組織とグループを持つ利用者だけ（system_admin は不可）。 */
-function pickDefaultUser(users: User[], storedId: string | null): User | null {
-  const stored = users.find((user) => user.id === storedId);
-  if (stored) {
-    return stored;
-  }
-  const uploader = users.find((user) => user.organization_id && user.group_id);
-  return uploader ?? users[0] ?? null;
-}
+type Tab = 'capture' | 'history' | 'admin';
 
 export function App() {
-  const [users, setUsers] = useState<User[]>([]);
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [me, setMe] = useState<Me | null>(null);
+  const [checkedLogin, setCheckedLogin] = useState(false);
   const [tab, setTab] = useState<Tab>('capture');
   // タブを押した回数。key に使い、開いているタブを押し直したときも作り直させる。
   // 同じタブに setTab しても state が変わらず、途中の画面に留まってしまうため。
   const [openCount, setOpenCount] = useState(0);
-  const [loadError, setLoadError] = useState('');
+
+  const loadMe = async () => {
+    try {
+      setMe(await fetchMe());
+    } catch {
+      // 401（未ログイン）に限らず、失敗した時点ではログイン画面を出す
+      setMe(null);
+    } finally {
+      setCheckedLogin(true);
+    }
+  };
 
   useEffect(() => {
-    const load = async () => {
-      try {
-        const data = await fetchBootstrap();
-        setUsers(data.users);
-        setCurrentUser(pickDefaultUser(data.users, localStorage.getItem(STORED_USER_KEY)));
-      } catch (error) {
-        setLoadError(error instanceof Error ? error.message : '初期データを取得できませんでした');
-      }
-    };
-    void load();
+    void loadMe();
   }, []);
 
   const openTab = (next: Tab) => {
@@ -44,36 +35,40 @@ export function App() {
     setOpenCount((count) => count + 1);
   };
 
-  const changeUser = (userId: string) => {
-    const selected = users.find((user) => user.id === userId) ?? null;
-    setCurrentUser(selected);
-    if (selected) {
-      localStorage.setItem(STORED_USER_KEY, selected.id);
-    }
+  const handleLogout = async () => {
+    await logout().catch(() => {});
+    setMe(null);
+    setTab('capture');
   };
+
+  if (!checkedLogin) {
+    return null;
+  }
+
+  if (!me) {
+    return (
+      <div className="app">
+        <main className="app__main">
+          <LoginScreen onLoggedIn={() => void loadMe()} />
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="app">
       <header className="app__header">
         <span className="app__brand">BCMan</span>
-        <select
-          className="app__user"
-          aria-label="利用者"
-          value={currentUser?.id ?? ''}
-          onChange={(event) => changeUser(event.target.value)}
-        >
-          {users.map((user) => (
-            <option key={user.id} value={user.id}>
-              {user.name}
-            </option>
-          ))}
-        </select>
+        <span className="hint">{me.name}</span>
+        <button type="button" className="button button--ghost" onClick={() => void handleLogout()}>
+          ログアウト
+        </button>
       </header>
 
       <main className="app__main">
-        {loadError && <p className="alert alert--error">{loadError}</p>}
-        {tab === 'capture' && <CaptureFlow key={openCount} user={currentUser} />}
-        {tab === 'history' && <HistoryScreen key={openCount} user={currentUser} />}
+        {tab === 'capture' && <CaptureFlow key={openCount} user={me} />}
+        {tab === 'history' && <HistoryScreen key={openCount} user={me} />}
+        {tab === 'admin' && me.role === 'admin' && <AdminScreen key={openCount} user={me} />}
       </main>
 
       <nav className="tabbar">
@@ -93,6 +88,16 @@ export function App() {
           <span aria-hidden="true">🗂</span>
           履歴
         </button>
+        {me.role === 'admin' && (
+          <button
+            type="button"
+            className={tab === 'admin' ? 'tabbar__item tabbar__item--active' : 'tabbar__item'}
+            onClick={() => openTab('admin')}
+          >
+            <span aria-hidden="true">👤</span>
+            管理
+          </button>
+        )}
       </nav>
     </div>
   );

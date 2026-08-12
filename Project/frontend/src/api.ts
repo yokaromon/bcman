@@ -2,32 +2,40 @@
 // ブラウザから見た API のパスは常に /bcman/api で始まる。
 const API_BASE = '/bcman/api';
 
-export type Role = 'system_admin' | 'org_admin' | 'member';
-
-export type User = {
-  id: string;
-  name: string;
-  role: Role;
-  organization_id: string | null;
-  group_id: string | null;
-};
-
-export type Organization = {
-  id: string;
-  name: string;
-  sharing_mode: string;
-};
+export type Role = 'admin' | 'member';
 
 export type Group = {
   id: string;
-  organization_id: string;
   name: string;
 };
 
-export type BootstrapData = {
-  users: User[];
-  organizations: Organization[];
+export type Me = {
+  id: string;
+  username: string;
+  name: string;
+  role: Role;
+  organization_id: string;
+  sharing_mode: string;
   groups: Group[];
+};
+
+export type LoginResult = { status: 'ok' | 'totp_required' };
+
+export type OrgUser = {
+  id: string;
+  username: string;
+  name: string;
+  role: Role;
+  groups: string[];
+};
+
+export type TrustedDevice = {
+  id: string;
+  label: string;
+  created_at: string;
+  last_used_at: string;
+  expires_at: string;
+  revoked: boolean;
 };
 
 export type PhotoSummary = {
@@ -115,17 +123,17 @@ async function readErrorMessage(response: Response): Promise<string> {
   return `${response.status} ${response.statusText}`;
 }
 
-async function request<T>(path: string, userId: string, init: RequestInit = {}): Promise<T> {
-  const headers: Record<string, string> = { ...((init.headers as Record<string, string>) ?? {}) };
-  if (userId) {
-    headers['X-User-Id'] = userId;
-  }
-
-  const response = await fetch(`${API_BASE}${path}`, { ...init, headers });
+/** 認証は Cookie（セッション）で行うため、ここではトークン等を一切扱わない。 */
+async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const response = await fetch(`${API_BASE}${path}`, { ...init, credentials: 'include' });
   if (!response.ok) {
     throw new ApiError(await readErrorMessage(response), response.status);
   }
   return (await response.json()) as T;
+}
+
+function jsonInit(method: string, body: unknown): RequestInit {
+  return { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) };
 }
 
 /**
@@ -144,59 +152,100 @@ export function photoThumbnailUrl(photoId: string): string {
   return `${API_BASE}/photos/${photoId}/thumbnail`;
 }
 
-export function fetchBootstrap(): Promise<BootstrapData> {
-  return request<BootstrapData>('/bootstrap', '');
+// --- 認証 ---
+
+export function login(username: string, password: string): Promise<LoginResult> {
+  return request<LoginResult>('/auth/login', jsonInit('POST', { username, password }));
+}
+export function verifyTotp(code: string): Promise<{ status: string }> {
+  return request<{ status: string }>('/auth/verify-totp', jsonInit('POST', { code }));
+}
+export function logout(): Promise<{ status: string }> {
+  return request<{ status: string }>('/auth/logout', { method: 'POST' });
+}
+export function fetchMe(): Promise<Me> {
+  return request<Me>('/auth/me');
 }
 
-export function fetchPhotos(userId: string): Promise<PhotoSummary[]> {
-  return request<PhotoSummary[]>('/photos', userId);
+// --- ユーザ・グループ・端末管理（Organization管理者のみ呼び出せる） ---
+
+export function fetchOrgGroups(orgId: string): Promise<Group[]> {
+  return request<Group[]>(`/organizations/${orgId}/groups`);
+}
+export function createOrgGroup(orgId: string, name: string): Promise<Group> {
+  return request<Group>(`/organizations/${orgId}/groups`, jsonInit('POST', { name }));
+}
+export function fetchOrgUsers(orgId: string): Promise<OrgUser[]> {
+  return request<OrgUser[]>(`/organizations/${orgId}/users`);
+}
+export function createOrgUser(
+  orgId: string,
+  body: { username: string; name: string; password: string; group_ids: string[]; role: Role },
+): Promise<{ id: string; username: string; totp_provisioning_uri: string }> {
+  return request(`/organizations/${orgId}/users`, jsonInit('POST', body));
+}
+export function resetUserPassword(orgId: string, userId: string, password: string): Promise<{ reset: boolean }> {
+  return request(`/organizations/${orgId}/users/${userId}/password`, jsonInit('PUT', { password }));
+}
+export function resetUserTotp(orgId: string, userId: string): Promise<{ totp_provisioning_uri: string }> {
+  return request(`/organizations/${orgId}/users/${userId}/reset-totp`, { method: 'POST' });
+}
+export function unlockUser(orgId: string, userId: string): Promise<{ unlocked: boolean }> {
+  return request(`/organizations/${orgId}/users/${userId}/unlock`, { method: 'POST' });
+}
+export function fetchUserDevices(orgId: string, userId: string): Promise<TrustedDevice[]> {
+  return request<TrustedDevice[]>(`/organizations/${orgId}/users/${userId}/devices`);
+}
+export function revokeDevice(orgId: string, deviceId: string): Promise<{ revoked: boolean }> {
+  return request(`/organizations/${orgId}/devices/${deviceId}`, { method: 'DELETE' });
 }
 
-export async function uploadPhoto(userId: string, file: File): Promise<string> {
+// --- 名刺 ---
+
+export function fetchPhotos(): Promise<PhotoSummary[]> {
+  return request<PhotoSummary[]>('/photos');
+}
+
+export async function uploadPhoto(groupId: string, file: File): Promise<string> {
   const body = new FormData();
   body.append('file', file);
-  const result = await request<{ photo_id: string }>('/photos', userId, { method: 'POST', body });
+  const result = await request<{ photo_id: string }>(`/photos?group_id=${encodeURIComponent(groupId)}`, {
+    method: 'POST',
+    body,
+  });
   return result.photo_id;
 }
 
-export function startProcessing(userId: string, photoId: string): Promise<{ status: string }> {
-  return request<{ status: string }>(`/photos/${photoId}/process`, userId, { method: 'POST' });
+export function startProcessing(photoId: string): Promise<{ status: string }> {
+  return request<{ status: string }>(`/photos/${photoId}/process`, { method: 'POST' });
 }
 
-export function fetchCards(userId: string, photoId: string): Promise<CardSummary[]> {
-  return request<CardSummary[]>(`/photos/${photoId}/cards`, userId);
+export function fetchCards(photoId: string): Promise<CardSummary[]> {
+  return request<CardSummary[]>(`/photos/${photoId}/cards`);
 }
 
-export function fetchCard(userId: string, cardId: string): Promise<CardDetail> {
-  return request<CardDetail>(`/cards/${cardId}`, userId);
+export function fetchCard(cardId: string): Promise<CardDetail> {
+  return request<CardDetail>(`/cards/${cardId}`);
 }
 
-export function saveContact(userId: string, cardId: string, contact: ContactInput): Promise<Contact> {
-  return request<Contact>(`/cards/${cardId}/contact`, userId, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(contact),
-  });
+export function saveContact(cardId: string, contact: ContactInput): Promise<Contact> {
+  return request<Contact>(`/cards/${cardId}/contact`, jsonInit('PUT', contact));
 }
 
-export function confirmCard(userId: string, cardId: string): Promise<{ status: string }> {
-  return request<{ status: string }>(`/cards/${cardId}/confirm`, userId, { method: 'POST' });
+export function confirmCard(cardId: string): Promise<{ status: string }> {
+  return request<{ status: string }>(`/cards/${cardId}/confirm`, { method: 'POST' });
 }
 
-export function reprocessCard(userId: string, cardId: string): Promise<{ status: CardStatus }> {
-  return request<{ status: CardStatus }>(`/cards/${cardId}/reprocess`, userId, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ocr: true, llm: true }),
-  });
+export function reprocessCard(cardId: string): Promise<{ status: CardStatus }> {
+  return request<{ status: CardStatus }>(`/cards/${cardId}/reprocess`, jsonInit('POST', { ocr: true, llm: true }));
 }
 
-export function deletePhoto(userId: string, photoId: string): Promise<{ deleted: boolean }> {
-  return request<{ deleted: boolean }>(`/photos/${photoId}`, userId, { method: 'DELETE' });
+export function deletePhoto(photoId: string): Promise<{ deleted: boolean }> {
+  return request<{ deleted: boolean }>(`/photos/${photoId}`, { method: 'DELETE' });
 }
 
-export function deleteCard(userId: string, cardId: string): Promise<{ deleted: boolean }> {
-  return request<{ deleted: boolean }>(`/cards/${cardId}`, userId, { method: 'DELETE' });
+export function deleteCard(cardId: string): Promise<{ deleted: boolean }> {
+  return request<{ deleted: boolean }>(`/cards/${cardId}`, { method: 'DELETE' });
 }
 
 /** 確認画面に出せる状態か。これ以外は解析途中か失敗のいずれか。 */
