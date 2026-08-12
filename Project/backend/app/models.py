@@ -86,6 +86,20 @@ class Contact(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now)
 
+class AuditLog(Base):
+    """削除のように実体が残らない操作の記録。写真や名刺を物理削除するため、
+    「何を失ったか」はこのテーブルにしか残らない。"""
+    __tablename__ = "audit_logs"
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=uid)
+    # 利用者が消えても「誰が」を辿れるよう、外部キーではなく値の複製で持つ
+    user_id: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
+    user_name: Mapped[str] = mapped_column(String, default="")
+    action: Mapped[str] = mapped_column(String, index=True)
+    target_type: Mapped[str] = mapped_column(String)
+    target_id: Mapped[str] = mapped_column(String, index=True)
+    detail: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now)
+
 class ProcessingHistory(Base):
     __tablename__ = "processing_history"
     id: Mapped[str] = mapped_column(String, primary_key=True, default=uid)

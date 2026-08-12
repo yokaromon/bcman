@@ -35,6 +35,8 @@ export type PhotoSummary = {
   filename: string;
   status: PhotoStatus;
   created_at: string;
+  card_count: number;
+  confirmed_count: number;
 };
 
 export type PhotoStatus = 'uploaded' | 'detecting' | 'detected' | 'completed' | 'failed';
@@ -134,6 +136,14 @@ export function cardImageUrl(cardId: string): string {
   return `${API_BASE}/cards/${cardId}/image`;
 }
 
+export function cardThumbnailUrl(cardId: string): string {
+  return `${API_BASE}/cards/${cardId}/thumbnail`;
+}
+
+export function photoThumbnailUrl(photoId: string): string {
+  return `${API_BASE}/photos/${photoId}/thumbnail`;
+}
+
 export function fetchBootstrap(): Promise<BootstrapData> {
   return request<BootstrapData>('/bootstrap', '');
 }
@@ -179,6 +189,14 @@ export function reprocessCard(userId: string, cardId: string): Promise<{ status:
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ ocr: true, llm: true }),
   });
+}
+
+export function deletePhoto(userId: string, photoId: string): Promise<{ deleted: boolean }> {
+  return request<{ deleted: boolean }>(`/photos/${photoId}`, userId, { method: 'DELETE' });
+}
+
+export function deleteCard(userId: string, cardId: string): Promise<{ deleted: boolean }> {
+  return request<{ deleted: boolean }>(`/cards/${cardId}`, userId, { method: 'DELETE' });
 }
 
 /** 確認画面に出せる状態か。これ以外は解析途中か失敗のいずれか。 */

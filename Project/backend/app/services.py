@@ -16,8 +16,63 @@ STRUCTURE_PROMPT = """次のOCR原文から名刺情報をJSONだけで抽出し
 OCR_MAX_EDGE = 1600
 OCR_JPEG_QUALITY = 85
 
+THUMBNAIL_MAX_EDGE = 800
+THUMBNAIL_JPEG_QUALITY = 80
+
 def image_size(path: Path):
     with Image.open(path) as image: return image.size
+
+def ensure_thumbnail(source: Path, thumb: Path) -> Path:
+    """一覧用の縮小JPEGのパスを返す。無ければ作って残す。
+    アップロード時ではなく初回参照時に作るのは、すでに保存済みの写真・名刺に対して
+    作り直しのバッチを用意せずに済ませるため。原本はそのまま残す。"""
+    if thumb.exists(): return thumb
+    if not source.exists(): raise FileNotFoundError(source)
+    with Image.open(source) as image:
+        prepared = image.convert("RGB")
+        prepared.thumbnail((THUMBNAIL_MAX_EDGE, THUMBNAIL_MAX_EDGE))
+        thumb.parent.mkdir(parents=True, exist_ok=True)
+        prepared.save(thumb, format="JPEG", quality=THUMBNAIL_JPEG_QUALITY)
+    return thumb
+
+def photo_thumbnail(photo: Photo) -> Path:
+    return ensure_thumbnail(Path(photo.storage_path), settings.storage_dir / "photos" / photo.id / "thumb.jpg")
+
+def card_thumbnail(card: BusinessCard) -> Path:
+    source = Path(card.corrected_image_path)
+    return ensure_thumbnail(source, source.parent / "thumb.jpg")
+
+def delete_card(card: BusinessCard, db: Session) -> dict:
+    """名刺と派生データを物理削除し、監査ログに残す要約を返す。
+    外部キーに CASCADE を張っていないので、子から順に明示的に消す。"""
+    # 消した後の card からは値を読めなくなるので、パスもログもここで確定させる
+    card_id, photo_id = card.id, card.photo_id
+    contact = db.query(Contact).filter_by(card_id=card_id).first()
+    summary = {
+        "card_id": card_id,
+        "confirmed": bool(contact and contact.confirmed),
+        "company_name": contact.company_name if contact else None,
+        "person_name": contact.person_name if contact else None,
+    }
+    db.query(Contact).filter_by(card_id=card_id).delete()
+    db.query(OCRResult).filter_by(card_id=card_id).delete()
+    db.query(ProcessingHistory).filter_by(card_id=card_id).delete()
+    db.delete(card)
+    shutil.rmtree(settings.storage_dir / "photos" / photo_id / "cards" / card_id, ignore_errors=True)
+    return summary
+
+def delete_photo(photo: Photo, db: Session) -> dict:
+    photo_id = photo.id
+    cards = db.query(BusinessCard).filter_by(photo_id=photo_id).all()
+    summary = {
+        "photo_id": photo_id,
+        "filename": photo.original_filename,
+        "created_at": photo.created_at.isoformat(),
+        "cards": [delete_card(card, db) for card in cards],
+    }
+    db.delete(photo)
+    shutil.rmtree(settings.storage_dir / "photos" / photo_id, ignore_errors=True)
+    return summary
 
 def encode_for_ocr(path: Path) -> str:
     """OCR APIへ送るJPEGをBase64で返す。長辺を抑えるのは、素の切り抜き画像(数MB)を

@@ -167,6 +167,16 @@ body {
   font-size: 1.1rem;
 }
 
+.button--danger {
+  background: var(--surface);
+  color: var(--danger);
+  border: 1px solid var(--danger);
+}
+
+.button--danger:active:not(:disabled) {
+  background: #fdecec;
+}
+
 .hidden-input {
   display: none;
 }
@@ -263,6 +273,93 @@ body {
 .badge--error {
   background: #fdecec;
   color: var(--danger);
+}
+
+/* --- 画像つき一覧 --- */
+
+.media-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.media-card {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--surface);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.media-card__image {
+  display: block;
+  width: 100%;
+  height: 120px;
+  object-fit: cover;
+  background: #f0f2f6;
+}
+
+.media-card__image--missing {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.media-card__body {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+}
+
+.media-card__title {
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.media-card__meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  white-space: nowrap;
+}
+
+/* --- 削除の確認 --- */
+
+.confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--danger);
+  border-radius: 10px;
+  background: #fdecec;
+}
+
+.confirm__message {
+  margin: 0;
+  color: var(--danger);
+  font-size: 0.9rem;
+}
+
+.confirm__actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
 }
 
 /* --- 名刺確認 --- */

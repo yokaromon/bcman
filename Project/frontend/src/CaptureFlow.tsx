@@ -179,6 +179,20 @@ export function CaptureFlow({ user }: { user: User | null }) {
     setReviewIndex(ahead >= 0 ? ahead : cards.findIndex((card) => !isConfirmed(card)));
   };
 
+  // 誤検出を間引く。残りを詰めて同じ位置を見せ、最後の1枚なら手前へ。
+  // 全部消えたら確認するものがないので完了扱いにする。
+  const handleDeleted = (cardId: string) => {
+    const remaining = cards.filter((card) => card.id !== cardId);
+    setCards(remaining);
+    failedRef.current.delete(cardId);
+    setFailedCardIds(new Set(failedRef.current));
+    if (remaining.length === 0) {
+      setPhase('done');
+      return;
+    }
+    setReviewIndex(Math.min(reviewIndex, remaining.length - 1));
+  };
+
   if (phase === 'idle' || phase === 'uploading') {
     return (
       <CaptureScreen
@@ -207,15 +221,18 @@ export function CaptureFlow({ user }: { user: User | null }) {
     return <ProcessingScreen fatalMessage={fatalMessage} onRestart={restart} />;
   }
 
+  // index を末尾で止めるのは、削除とポーリングの更新が前後したときに
+  // 範囲外を指して空白画面になるのを防ぐため。
   return (
     <CardPager
       userId={userId}
       cards={cards}
-      index={reviewIndex}
+      index={Math.min(reviewIndex, cards.length - 1)}
       failedCardIds={failedCardIds}
       confirmLabel="登録して次へ"
       onIndexChange={setReviewIndex}
       onConfirmed={handleConfirmed}
+      onDeleted={handleDeleted}
       onFinish={() => setPhase('done')}
     />
   );

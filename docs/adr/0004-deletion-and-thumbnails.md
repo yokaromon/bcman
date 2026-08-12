@@ -1,0 +1,11 @@
+# Deleting Photos and Business Cards, and showing them as pictures
+
+A Photo and a Business Card can each be deleted, and deletion is physical: the row, everything derived from it, and the image files under the Photo's storage directory all go. Deleting a Photo takes its Business Cards with it, and each Business Card takes its OCR Results, its Contact, and its Processing History. Nothing is hidden-but-kept, because a restore path was never going to be built and a Photo is several megabytes of image that would otherwise sit there forever.
+
+Since nothing of the deleted thing survives, an Audit Log records what happened: who deleted what, when, and a summary of the Contacts that went with it — company and person name, and whether they had been confirmed. The Audit Log copies the actor's name rather than pointing at the User, so the record still reads correctly after that User is gone. There is no screen for it yet; it exists so the question "what did we lose" has an answer.
+
+Deletion is offered where the thing itself is on screen — a Photo from the Business Card list you reach by opening it, a Business Card from its confirmation screen — and never from a row in a list, where a thumb aimed at "open" would land on "destroy". Both ask a second time in place, with the count of confirmed Contacts named in the question. Confirmed Contacts do not block deletion; a Contact registered from a misread card is exactly the thing someone needs to remove.
+
+Deleting a Business Card closes the gap rather than leaving a hole: the remaining cards shift up and confirmation stays where it was, moving back one when the last card goes and leaving the pager entirely when none remain. This follows from cards being pages over a list, not fixed slots.
+
+Both lists lead with a picture — the whole Photo for the Photo list, the cropped card for the Business Card list — because a timestamp and a status word do not tell you which photo you are looking at. Thumbnails are generated the first time one is asked for and then kept, which avoids a migration for the photos already stored and costs one resize per image over the system's life. They are deliberately not derived at display time from the full image: an original is several megabytes, and a list of them would make the history screen unusable on a phone.

@@ -1,6 +1,7 @@
-import { useRef, type TouchEvent } from 'react';
-import { cardImageUrl, cardStatusLabel, isCardReady, type CardSummary } from '../api';
+import { useRef, useState, type TouchEvent } from 'react';
+import { cardImageUrl, cardStatusLabel, deleteCard, isCardReady, type CardSummary } from '../api';
 import { CardReviewBody } from './CardReviewBody';
+import { ConfirmButton } from './ConfirmButton';
 
 /** 縦スクロールを横めくりと取り違えないための閾値。 */
 const SWIPE_MIN_PX = 50;
@@ -16,6 +17,7 @@ type Props = {
   confirmLabel: string;
   onIndexChange: (next: number) => void;
   onConfirmed: (cardId: string) => void;
+  onDeleted?: (cardId: string) => void;
   onFinish?: () => void;
 };
 
@@ -27,9 +29,11 @@ export function CardPager({
   confirmLabel,
   onIndexChange,
   onConfirmed,
+  onDeleted,
   onFinish,
 }: Props) {
   const touchStart = useRef<{ x: number; y: number } | null>(null);
+  const [errorMessage, setErrorMessage] = useState('');
   const card = cards[index];
   const total = cards.length;
 
@@ -70,6 +74,21 @@ export function CardPager({
 
   const failed = failedCardIds.has(card.id);
   const showForm = failed || isCardReady(card.status);
+  const deletionMessage =
+    card.status === 'confirmed'
+      ? 'この名刺は登録済みです。削除すると連絡先も消えます。元に戻せません。'
+      : 'この名刺と読み取り結果を削除します。元に戻せません。';
+
+  const remove = async () => {
+    setErrorMessage('');
+    try {
+      await deleteCard(userId, card.id);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : '名刺を削除できませんでした');
+      return;
+    }
+    onDeleted?.(card.id);
+  };
 
   return (
     <div className="screen screen--form">
@@ -129,6 +148,17 @@ export function CardPager({
           <div className="spinner" />
           <p className="lead">{cardStatusLabel(card.status)}…</p>
         </div>
+      )}
+
+      {errorMessage && <p className="alert alert--error">{errorMessage}</p>}
+
+      {onDeleted && (
+        <ConfirmButton
+          label="この名刺を削除"
+          message={deletionMessage}
+          confirmLabel="削除する"
+          onConfirm={remove}
+        />
       )}
 
       {onFinish && (

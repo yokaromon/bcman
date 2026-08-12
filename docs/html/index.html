@@ -31,6 +31,7 @@
         .api-table .method-get { color: #4caf50; font-weight: bold; }
         .api-table .method-post { color: #2196f3; font-weight: bold; }
         .api-table .method-put { color: #ff9800; font-weight: bold; }
+        .api-table .method-delete { color: #c62828; font-weight: bold; }
         .status-badge { display: inline-block; padding: 4px 12px; border-radius: 12px; font-size: 0.8rem; font-weight: 600; }
         .status-uploaded { background: #e3f2fd; color: #1976d2; }
         .status-completed { background: #e8f5e9; color: #388e3c; }
@@ -201,7 +202,9 @@
             <thead><tr><th>エンドポイント</th><th>メソッド</th><th>説明</th></tr></thead>
             <tbody>
                 <tr><td><code>/api/photos</code></td><td class="method-post">POST</td><td>写真をアップロード</td></tr>
-                <tr><td><code>/api/photos</code></td><td class="method-get">GET</td><td>ユーザーが閲覧可能な写真一覧</td></tr>
+                <tr><td><code>/api/photos</code></td><td class="method-get">GET</td><td>ユーザーが閲覧可能な写真一覧(名刺枚数・登録済み件数を含む)</td></tr>
+                <tr><td><code>/api/photos/{id}</code></td><td class="method-delete">DELETE</td><td>写真を削除(名刺・OCR・Contact・画像ファイルも消える)</td></tr>
+                <tr><td><code>/api/photos/{id}/thumbnail</code></td><td class="method-get">GET</td><td>写真のサムネイル(初回参照時に生成)</td></tr>
                 <tr><td><code>/api/photos/{id}/detect</code></td><td class="method-post">POST</td><td>写真から名刺を検出</td></tr>
                 <tr><td><code>/api/photos/{id}/process</code></td><td class="method-post">POST</td><td>一括処理(検出→OCR→LLM)</td></tr>
                 <tr><td><code>/api/photos/{id}/cards</code></td><td class="method-get">GET</td><td>写真に含まれる名刺一覧</td></tr>
@@ -213,7 +216,9 @@
             <thead><tr><th>エンドポイント</th><th>メソッド</th><th>説明</th></tr></thead>
             <tbody>
                 <tr><td><code>/api/cards/{id}</code></td><td class="method-get">GET</td><td>名刺詳細(画像・OCR・Contact)</td></tr>
+                <tr><td><code>/api/cards/{id}</code></td><td class="method-delete">DELETE</td><td>名刺を削除(OCR・Contact・画像ファイルも消える)</td></tr>
                 <tr><td><code>/api/cards/{id}/image</code></td><td class="method-get">GET</td><td>名刺画像を取得</td></tr>
+                <tr><td><code>/api/cards/{id}/thumbnail</code></td><td class="method-get">GET</td><td>名刺のサムネイル(初回参照時に生成)</td></tr>
                 <tr><td><code>/api/cards/{id}/ocr</code></td><td class="method-post">POST</td><td>OCRを再実行</td></tr>
                 <tr><td><code>/api/cards/{id}/structure</code></td><td class="method-post">POST</td><td>LLM構造化を再実行</td></tr>
                 <tr><td><code>/api/cards/{id}/contact</code></td><td class="method-put">PUT</td><td>Contact情報を更新</td></tr>
@@ -366,6 +371,22 @@
                 <tr><td>created_at</td><td>DateTime</td><td>実行日時</td></tr>
             </tbody>
         </table>
+
+        <h3>4.9 AuditLog (操作ログ)</h3>
+        <p>写真・名刺は物理削除するため、失われたものの記録はこのテーブルにしか残らない。参照用の画面はまだない。</p>
+        <table class="data-table">
+            <thead><tr><th>カラム</th><th>型</th><th>説明</th></tr></thead>
+            <tbody>
+                <tr><td>id</td><td>UUID</td><td>主キー</td></tr>
+                <tr><td>user_id</td><td>String</td><td>操作した利用者のID（FKではない）</td></tr>
+                <tr><td>user_name</td><td>String</td><td>操作した利用者の名前。利用者が消えても辿れるよう値で複製する</td></tr>
+                <tr><td>action</td><td>String</td><td>操作種別: delete</td></tr>
+                <tr><td>target_type</td><td>String</td><td>対象種別: photo / card</td></tr>
+                <tr><td>target_id</td><td>String</td><td>対象のID</td></tr>
+                <tr><td>detail</td><td>JSON</td><td>消えた内容の要約（会社名・氏名・確定登録済みか）</td></tr>
+                <tr><td>created_at</td><td>DateTime</td><td>操作日時</td></tr>
+            </tbody>
+        </table>
     </section>
 
     <section id="api-reference">
@@ -420,7 +441,31 @@
         <div class="code-block">POST /api/cards/{card_id}/confirm</div>
         <div class="code-block">レスポンス: {"status": "confirmed"}</div>
 
-        <h3>5.8 Bootstrapデータ取得</h3>
+        <h3>5.8 写真一覧取得</h3>
+        <div class="code-block">GET /api/photos</div>
+        <div class="code-block">レスポンス: [
+  {
+    "id": "uuid",
+    "filename": "IMG_0001.jpg",
+    "status": "completed",
+    "created_at": "2026-08-12T05:30:00",
+    "card_count": 3,
+    "confirmed_count": 2
+  }
+]</div>
+
+        <h3>5.9 削除</h3>
+        <div class="code-block">DELETE /api/photos/{photo_id}</div>
+        <div class="code-block">DELETE /api/cards/{card_id}</div>
+        <div class="code-block">レスポンス: {"deleted": true}</div>
+        <p>物理削除。写真を消すと配下の名刺・OCR結果・Contact・処理履歴と、ストレージ上の画像ファイルがまとめて消える。確定登録済みのContactが含まれていても削除は止めない。消えた内容の要約はAuditLogに残す。閲覧できる利用者は削除もできる。</p>
+
+        <h3>5.10 サムネイル取得</h3>
+        <div class="code-block">GET /api/photos/{photo_id}/thumbnail</div>
+        <div class="code-block">GET /api/cards/{card_id}/thumbnail</div>
+        <p>長辺800pxのJPEGを返す。初回参照時に生成して <code>thumb.jpg</code> として保存し、以降はそれを返す。<code>Cache-Control: private, max-age=604800</code>。元画像が無い古いデータでは404。</p>
+
+        <h3>5.11 Bootstrapデータ取得</h3>
         <div class="code-block">GET /api/bootstrap</div>
         <div class="code-block">レスポンス: {
   "users": [{"id": "...", "name": "...", "role": "...", ...}],
@@ -477,7 +522,10 @@ npm run dev</div>
 │       └── tsconfig.json
 └── docs/
     ├── adr/
-    │   └── 0001-organization-sharing-mode.md
+    │   ├── 0001-organization-sharing-mode.md
+    │   ├── 0002-mobile-first-capture-flow.md
+    │   ├── 0003-card-navigation-and-ordering.md
+    │   └── 0004-deletion-and-thumbnails.md
     ├── business_card_webapp_spec.md
     └── html/
         └── index.html          # このドキュメント</div>
@@ -487,9 +535,27 @@ npm run dev</div>
         <ol>
             <li><code>detect_cards()</code>: OpenCVでCanny Edge + Contours検出</li>
             <li>面積・縦横比で名刺候補をフィルタリング</li>
+            <li>候補を写真上の配置順（上の行から、行内は左から）に並べ替え（ADR 0003参照）</li>
             <li>各候補を切り抜き、detected.jpg / corrected.jpg に保存</li>
             <li><code>run_ocr()</code>: 画像をBase64エンコードしてOCR APIに送信</li>
             <li><code>structure()</code>: OCR結果をLLMに渡し、JSON構造化</li>
+        </ol>
+
+        <h4>ストレージ構成</h4>
+        <div class="code-block">storage/photos/{photo_id}/
+├── original.jpg        # 原本（PNGなら original.png）
+├── thumb.jpg           # 一覧用サムネイル（初回参照時に生成）
+└── cards/{card_id}/
+    ├── detected.jpg    # 切り抜き
+    ├── corrected.jpg   # 補正画像（OCRの入力）
+    └── thumb.jpg       # 一覧用サムネイル（初回参照時に生成）</div>
+
+        <h4>削除 (ADR 0004参照)</h4>
+        <ol>
+            <li><code>delete_card()</code>: Contact / OCRResult / ProcessingHistory を消し、名刺の行と <code>cards/{card_id}/</code> を消す</li>
+            <li><code>delete_photo()</code>: 配下の名刺すべてに上記を適用し、写真の行と <code>photos/{photo_id}/</code> を消す</li>
+            <li>外部キーに CASCADE を張っていないため、子から順に明示的に消す</li>
+            <li>消す前に内容の要約を作り、<code>AuditLog</code> に記録してから commit する</li>
         </ol>
 
         <h4>権限判定</h4>
