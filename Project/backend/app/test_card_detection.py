@@ -1,6 +1,6 @@
 import cv2
 import numpy as np
-from app.services import _containment, _ordered_corners, card_quads
+from app.services import _containment, _largest_candidate_from_smaller, _ordered_corners, card_quads
 
 PHOTO_WIDTH, PHOTO_HEIGHT = 2000, 1500
 # 名刺の実寸 91×55mm と同じ比 1.655 になる大きさ
@@ -42,6 +42,24 @@ def test_detected_quads_keep_the_card_shape():
 def test_blank_photo_yields_no_candidate():
     """名刺の写っていない写真からは候補を作らない（呼び出し側が写真全体を1枚として拾う）。"""
     assert card_quads(np.full((PHOTO_HEIGHT, PHOTO_WIDTH, 3), 255, np.uint8)) == []
+
+
+def test_retry_on_a_smaller_copy_returns_original_scale_corners():
+    """縮小して拾い直した四隅は、原寸のピクセル座標で返る。
+    ここを取り違えると、切り抜きが写真の左上に寄った別の場所になる。"""
+    photo = np.full((3000, 4000, 3), 255, np.uint8)
+    corners = cv2.boxPoints(((2000, 1500), (2400, 1450), 0))
+    cv2.fillPoly(photo, [corners.astype(np.int32)], (70, 70, 70))
+    found = _largest_candidate_from_smaller(photo)
+    assert len(found) == 1
+    (_, _), (width, height), _ = cv2.minAreaRect(np.float32(found[0][0]))
+    assert abs(max(width, height) - 2400) <= 40
+    assert abs(min(width, height) - 1450) <= 40
+
+
+def test_retry_is_skipped_when_the_photo_is_already_small():
+    """すでに縮小サイズ以下の写真では拾い直さない。同じ画像を二度走査するだけになる。"""
+    assert _largest_candidate_from_smaller(np.full((900, 1200, 3), 255, np.uint8)) == []
 
 
 def test_corners_are_ordered_clockwise_from_top_left():

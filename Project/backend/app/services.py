@@ -4,7 +4,7 @@ from pathlib import Path
 import cv2
 import httpx
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageOps
 from sqlalchemy.orm import Session
 from .models import BusinessCard, Contact, OCRResult, Photo, ProcessingHistory
 from .schemas import CONTACT_FIELDS
@@ -45,12 +45,18 @@ CARD_LIMIT = 12
 CARD_CONTAINMENT = .6
 CARD_APPROX_EPSILON_RATIO = .02
 CARD_EDGE_CLOSE_KERNEL = 5
+# 全画素で1枚も採れなかったときに拾い直す縮小サイズ。手に持って撮った1枚は指で外形が
+# 途切れ、1200万画素のままでは輪郭が閉じずに名刺の形にならない。縮小すると途切れが埋まる。
+# 逆に机に並べた複数枚では机の輪郭が優勢になって本物を飲み込むので、初手には使わない。
+CARD_RETRY_LONG_EDGE = 2000
 
 THUMBNAIL_MAX_EDGE = 800
 THUMBNAIL_JPEG_QUALITY = 80
 
 def image_size(path: Path):
-    with Image.open(path) as image: return image.size
+    """EXIFの回転を適用したあとの寸法を返す。検出も切り出しも cv2 が EXIF を適用した向きで
+    行うので、生の寸法を返すと保存した写真サイズと名刺の座標が別の空間の値になる。"""
+    with Image.open(path) as image: return ImageOps.exif_transpose(image).size
 
 def ensure_thumbnail(source: Path, thumb: Path) -> Path:
     """一覧用の縮小JPEGのパスを返す。無ければ作って残す。
@@ -59,7 +65,8 @@ def ensure_thumbnail(source: Path, thumb: Path) -> Path:
     if thumb.exists(): return thumb
     if not source.exists(): raise FileNotFoundError(source)
     with Image.open(source) as image:
-        prepared = image.convert("RGB")
+        # スマホの写真はEXIFで向きを持つ。適用しないと一覧だけ横倒しで並ぶ
+        prepared = ImageOps.exif_transpose(image).convert("RGB")
         prepared.thumbnail((THUMBNAIL_MAX_EDGE, THUMBNAIL_MAX_EDGE))
         thumb.parent.mkdir(parents=True, exist_ok=True)
         prepared.save(thumb, format="JPEG", quality=THUMBNAIL_JPEG_QUALITY)
@@ -178,8 +185,8 @@ def _containment(a, b) -> float:
     intersection = max(0, ex-ix) * max(0, ey-iy)
     return intersection / max(1, min(aw*ah, bw*bh))
 
-def card_quads(image):
-    """写真から名刺候補の四隅を、上の行から・行内は左から並べて返す。"""
+def _card_candidates(image):
+    """名刺らしい四角形を輪郭から拾い、重なるものを畳んで (四隅, 外接矩形) を面積の大きい順に返す。"""
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     edges = cv2.Canny(cv2.GaussianBlur(gray, (5, 5), 0), 50, 150)
     # Canny のエッジは途切れるので、閉じてから輪郭を取らないと1枚の名刺が断片に割れる
@@ -198,6 +205,22 @@ def card_quads(image):
         if overlapped: continue
         accepted.append((quad, box))
         if len(accepted) >= CARD_LIMIT: break
+    return accepted
+
+def _largest_candidate_from_smaller(image):
+    """縮小した画像で拾い直し、四隅を元の寸法に戻して1件だけ返す。
+    ここへ来るのは全画素で1枚も採れなかった写真、つまり名刺を手に持って大きく撮った類。
+    縮小で拾えるのは大きく写った1枚なので、最大の候補だけを採る。"""
+    long_edge = max(image.shape[:2])
+    if long_edge <= CARD_RETRY_LONG_EDGE: return []
+    scale = CARD_RETRY_LONG_EDGE / float(long_edge)
+    smaller = cv2.resize(image, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
+    candidates = _card_candidates(smaller)[:1]
+    return [(quad / scale, cv2.boundingRect((quad / scale).astype(np.int32))) for quad, _ in candidates]
+
+def card_quads(image):
+    """写真から名刺候補の四隅を、上の行から・行内は左から並べて返す。"""
+    accepted = _card_candidates(image) or _largest_candidate_from_smaller(image)
     # 輪郭の走査順は写真上の配置と無関係（右下の名刺が先頭になることがある）。
     # 画面では順にめくって確認するので、上の行から・行内は左からの順に並べ替える。
     # 行の判定に自身の高さを使うと、横に並んだ名刺のわずかなy差では行が割れない。
