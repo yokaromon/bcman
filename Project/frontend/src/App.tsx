@@ -3,6 +3,7 @@ import { fetchMe, logout, type Me } from './api';
 import { CaptureFlow } from './CaptureFlow';
 import { AdminScreen } from './components/AdminScreen';
 import { HistoryScreen } from './components/HistoryScreen';
+import { InstallAppButton } from './components/InstallAppButton';
 import { LoginScreen } from './components/LoginScreen';
 
 type Tab = 'capture' | 'history' | 'admin';
@@ -58,11 +59,16 @@ export function App() {
   return (
     <div className="app">
       <header className="app__header">
-        <span className="app__brand">BCMan</span>
-        <span className="hint">{me.name}</span>
-        <button type="button" className="button button--ghost" onClick={() => void handleLogout()}>
-          ログアウト
-        </button>
+        <div className="app__header-group">
+          <span className="app__brand">BCMan</span>
+          <InstallAppButton />
+        </div>
+        <div className="app__header-group">
+          <span className="hint">{me.name}</span>
+          <button type="button" className="button button--ghost" onClick={() => void handleLogout()}>
+            ログアウト
+          </button>
+        </div>
       </header>
 
       <main className="app__main">
