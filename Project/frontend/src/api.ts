@@ -102,6 +102,7 @@ export type CardDetail = {
   contact: Contact | null;
   ocr_text: string;
   review_flags: Partial<Record<ContactField, string>>;
+  orientation: number;
 };
 
 export class ApiError extends Error {
@@ -241,6 +242,9 @@ export function confirmCard(cardId: string): Promise<{ status: string }> {
 
 export function reprocessCard(cardId: string): Promise<{ status: CardStatus }> {
   return request<{ status: CardStatus }>(`/cards/${cardId}/reprocess`, jsonInit('POST', { ocr: true, llm: true }));
+}
+export function setCardOrientation(cardId: string, rotation: number): Promise<{ status: CardStatus; orientation: number }> {
+  return request(`/cards/${cardId}/orientation`, jsonInit('POST', { rotation }));
 }
 
 export function deletePhoto(photoId: string): Promise<{ deleted: boolean }> {

@@ -15,7 +15,8 @@ STRUCTURE_PROMPT = """次のOCR原文から名刺情報をJSONだけで抽出し
 
 OCR_MAX_EDGE = 1600
 OCR_JPEG_QUALITY = 85
-DETECTION_PROMPT = """Find every business card in this image. Return JSON only: {\"cards\":[{\"corners\":[[x,y],[x,y],[x,y],[x,y]]}]}. Coordinates are pixels in the original image, corners ordered top-left, top-right, bottom-right, bottom-left. Return an empty array only if no card is visible."""
+DETECTION_PROMPT = """Find every business card in this image. Return JSON only: {\"cards\":[{\"corners\":[[x,y],[x,y],[x,y],[x,y]],\"rotation\":0|90|180|270|null}]}. Coordinates are pixels in the original image, corners ordered top-left, top-right, bottom-right, bottom-left. rotation is the clockwise turn needed to make text upright; use null when uncertain. Return an empty array only if no card is visible."""
+ORIENTATION_PROMPT = "Return JSON only: {\"rotation\":0|90|180|270|null}. Choose the clockwise rotation needed to make the business card text upright for reading. Return null when uncertain."
 
 THUMBNAIL_MAX_EDGE = 800
 THUMBNAIL_JPEG_QUALITY = 80
@@ -40,7 +41,7 @@ def photo_thumbnail(photo: Photo) -> Path:
     return ensure_thumbnail(Path(photo.storage_path), settings.storage_dir / "photos" / photo.id / "thumb.jpg")
 
 def card_thumbnail(card: BusinessCard) -> Path:
-    source = Path(card.corrected_image_path)
+    source = Path(card.oriented_image_path or card.corrected_image_path)
     return ensure_thumbnail(source, source.parent / "thumb.jpg")
 
 def delete_card(card: BusinessCard, db: Session) -> dict:
@@ -109,9 +110,9 @@ def _write_card(photo: Photo, db: Session, image, corners, confidence=.75):
     out_w, out_h = max(1, round(max(widths))), max(1, round(max(heights)))
     transform = cv2.getPerspectiveTransform(points, np.float32([[0,0],[out_w-1,0],[out_w-1,out_h-1],[0,out_h-1]]))
     corrected_image = cv2.warpPerspective(image, transform, (out_w, out_h))
-    detected = target / "detected.jpg"; corrected = target / "corrected.jpg"
-    cv2.imwrite(str(detected), image[max(0,y):max(0,y)+h, max(0,x):max(0,x)+w]); cv2.imwrite(str(corrected), corrected_image)
-    card.detected_image_path, card.corrected_image_path, card.status = str(detected), str(corrected), "corrected"
+    detected = target / "detected.jpg"; corrected = target / "corrected.jpg"; oriented = target / "oriented-0.jpg"
+    cv2.imwrite(str(detected), image[max(0,y):max(0,y)+h, max(0,x):max(0,x)+w]); cv2.imwrite(str(corrected), corrected_image); cv2.imwrite(str(oriented), corrected_image)
+    card.detected_image_path, card.corrected_image_path, card.oriented_image_path, card.orientation, card.status = str(detected), str(corrected), str(oriented), 0, "corrected"
     return card
 
 def detect_cards(photo: Photo, db: Session):
@@ -162,7 +163,10 @@ async def improve_detection(photo: Photo, db: Session):
         duplicate = next((card for card in local_cards if _iou((x,y,w,h), (card.x,card.y,card.width,card.height)) > .5), None)
         if duplicate:
             shutil.rmtree(Path(duplicate.corrected_image_path).parent, ignore_errors=True); db.delete(duplicate); db.flush(); local_cards.remove(duplicate)
-        local_cards.append(_write_card(photo, db, image, corners, .9))
+        card = _write_card(photo, db, image, corners, .9)
+        rotation = item.get("rotation") if isinstance(item, dict) else None
+        if rotation in {0, 90, 180, 270}: apply_orientation(card, db, rotation, automatic=True)
+        local_cards.append(card)
     db.commit()
 
 def _iou(a, b):
@@ -180,12 +184,36 @@ async def chat(messages):
         data = response.json()
     return data["choices"][0]["message"]["content"], data
 
+def _rotated_image(source: Path, rotation: int, target: Path):
+    image = cv2.imread(str(source))
+    if image is None: raise ValueError("名刺画像を読み込めません")
+    transforms = {0: None, 90: cv2.ROTATE_90_CLOCKWISE, 180: cv2.ROTATE_180, 270: cv2.ROTATE_90_COUNTERCLOCKWISE}
+    if rotation: image = cv2.rotate(image, transforms[rotation])
+    cv2.imwrite(str(target), image)
+
+async def orient_card(card: BusinessCard, db: Session):
+    """OCRの前に読む向きをAIで推定し、失敗・不明なら無回転の派生画像を維持する。"""
+    encoded = encode_for_ocr(Path(card.corrected_image_path))
+    try:
+        content, _ = await chat([{"role":"user","content":[{"type":"text","text":ORIENTATION_PROMPT},{"type":"image_url","image_url":{"url":f"data:image/jpeg;base64,{encoded}"}}]}])
+        rotation = json.loads(content.removeprefix("```json").removesuffix("```").strip()).get("rotation")
+        if rotation not in {0, 90, 180, 270}: return
+    except Exception: return
+    apply_orientation(card, db, rotation, automatic=True)
+
+def apply_orientation(card: BusinessCard, db: Session, rotation: int, automatic=False):
+    target = Path(card.corrected_image_path).parent / f"oriented-{rotation}-{len(db.query(OCRResult).filter_by(card_id=card.id).all())}.jpg"
+    _rotated_image(Path(card.corrected_image_path), rotation, target)
+    card.oriented_image_path, card.orientation = str(target), rotation
+    db.add(ProcessingHistory(card_id=card.id, process_type="orientation", engine="ykr-multimodal" if automatic else "user", version=settings.ai_model if automatic else "", input_json={"rotation":rotation}, output_json={"image_path":str(target)}))
+    db.commit()
+
 async def run_ocr(card: BusinessCard, db: Session):
     card.status = "ocr_processing"; db.commit()
-    encoded = encode_for_ocr(Path(card.corrected_image_path))
+    encoded = encode_for_ocr(Path(card.oriented_image_path or card.corrected_image_path))
     text, response = await chat([{"role":"user","content":[{"type":"text","text":OCR_PROMPT},{"type":"image_url","image_url":{"url":f"data:image/jpeg;base64,{encoded}"}}]}])
     db.add(OCRResult(card_id=card.id, engine="ykr-multimodal", engine_version=settings.ai_model, raw_text=text, raw_json=response))
-    db.add(ProcessingHistory(card_id=card.id, process_type="ocr", engine="ykr-multimodal", version=settings.ai_model, input_json={"prompt":OCR_PROMPT}, output_json={"raw_text":text}))
+    db.add(ProcessingHistory(card_id=card.id, process_type="ocr", engine="ykr-multimodal", version=settings.ai_model, input_json={"prompt":OCR_PROMPT,"orientation":card.orientation}, output_json={"raw_text":text}))
     card.status = "ocr_completed"; db.commit()
 
 async def structure(card: BusinessCard, db: Session):
@@ -208,7 +236,7 @@ async def _process_card(card_id: str):
         with SessionLocal() as db:
             card = db.get(BusinessCard, card_id)
             try:
-                await run_ocr(card, db); await structure(card, db); return
+                await orient_card(card, db); await run_ocr(card, db); await structure(card, db); return
             except Exception:
                 db.rollback()
                 if attempt:

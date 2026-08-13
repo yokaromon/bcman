@@ -21,7 +21,7 @@ A Contact explicitly accepted by a user as the registered record.
 _Avoid_: Auto-registered contact
 
 **Recognition Result**:
-OCR text blocks and structured-field candidates derived from a Business Card, which remain reviewable evidence rather than confirmed data.
+OCR text blocks and structured-field candidates derived from a Business Card, which remain reviewable evidence rather than confirmed data. Re-recognition after a Reading Orientation correction adds a new result without replacing the earlier one.
 _Avoid_: Contact, final result
 
 **Best-effort Recognition**:
@@ -39,6 +39,10 @@ _Avoid_: Retaking a photo, rectangular crop
 **Card Detection**:
 The process that identifies Business Card candidates and their four corners in a Photo. It uses local image contours first and an image-AI fallback when fewer than eight candidates are found or any local candidate is too uncertain. Overlapping results for the same physical card become one candidate, using the image-AI corners when available.
 _Avoid_: OCR, rectangular cropping
+
+**Reading Orientation**:
+The rotation of 0, 90, 180, or 270 degrees that presents the printed content of a perspective-corrected Business Card upright for recognition. Image-AI Card Detection infers it together with the corners; locally detected cards also receive an image-AI orientation check before OCR, and the user can correct it in 90-degree steps before re-recognition. An unknown orientation leaves the image unrotated and is surfaced for user correction; manual rotation previews before it is committed and re-recognised. The orientation-corrected image is retained separately from the perspective-corrected image.
+_Avoid_: Card angle, image rotation
 
 **Retry Required**:
 The state of a detected Business Card whose OCR or structuring attempt still fails after one automatic retry. It remains a review candidate and can be retried independently without interrupting other cards.

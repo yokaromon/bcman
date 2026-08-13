@@ -91,6 +91,8 @@ class BusinessCard(Base):
     photo_id: Mapped[str] = mapped_column(ForeignKey("photos.id"), index=True)
     detected_image_path: Mapped[str] = mapped_column(String)
     corrected_image_path: Mapped[str] = mapped_column(String)
+    oriented_image_path: Mapped[str] = mapped_column(String, default="")
+    orientation: Mapped[int] = mapped_column(Integer, default=0)
     detection_confidence: Mapped[float] = mapped_column(Float, default=0)
     x: Mapped[int] = mapped_column(Integer, default=0)
     y: Mapped[int] = mapped_column(Integer, default=0)

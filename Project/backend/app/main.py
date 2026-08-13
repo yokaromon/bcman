@@ -8,8 +8,8 @@ from sqlalchemy.orm import Session
 from . import auth
 from .database import Base, SessionLocal, engine, get_db
 from .models import AuditLog, BusinessCard, Contact, Group, OCRResult, Organization, Photo, TrustedDevice, User, UserGroup
-from .schemas import BatchConfirmInput, CompleteReviewInput, ContactInput, GroupInput, LoginInput, ManualCardInput, OrganizationInput, PasswordResetInput, ReprocessInput, TotpInput, UserInput
-from .services import add_manual_card, card_thumbnail, delete_card, delete_photo, detect_cards, image_size, photo_thumbnail, process_card, process_photo, run_ocr, structure
+from .schemas import BatchConfirmInput, CompleteReviewInput, ContactInput, GroupInput, LoginInput, ManualCardInput, OrientationInput, OrganizationInput, PasswordResetInput, ReprocessInput, TotpInput, UserInput
+from .services import add_manual_card, apply_orientation, card_thumbnail, delete_card, delete_photo, detect_cards, image_size, photo_thumbnail, process_card, process_photo, run_ocr, structure
 from .settings import settings
 
 # サムネイルは中身が変わらず、変われば元の名刺ごと別IDになる。
@@ -27,6 +27,9 @@ def bootstrap():
         with engine.begin() as connection:
             columns = {row[1] for row in connection.execute(text("PRAGMA table_info(contacts)"))}
             if "review_flags" not in columns: connection.execute(text("ALTER TABLE contacts ADD COLUMN review_flags JSON DEFAULT '{}'"))
+            card_columns = {row[1] for row in connection.execute(text("PRAGMA table_info(business_cards)"))}
+            if "oriented_image_path" not in card_columns: connection.execute(text("ALTER TABLE business_cards ADD COLUMN oriented_image_path VARCHAR DEFAULT ''"))
+            if "orientation" not in card_columns: connection.execute(text("ALTER TABLE business_cards ADD COLUMN orientation INTEGER DEFAULT 0"))
 @app.on_event("startup")
 def startup(): bootstrap()
 
@@ -247,13 +250,14 @@ def cards(photo_id: str, db: Session=Depends(get_db), user: User=Depends(current
 @app.get("/api/cards/{card_id}")
 def card(card_id: str, db: Session=Depends(get_db), user: User=Depends(current_user)):
     c=card_for_user(card_id,db,user); contact=db.query(Contact).filter_by(card_id=c.id).first(); ocr=db.query(OCRResult).filter_by(card_id=c.id).order_by(OCRResult.created_at.desc()).first()
-    return {"id":c.id,"status":c.status,"image_url":f"/api/cards/{c.id}/image","contact":{k:getattr(contact,k) for k in Contact.__table__.columns.keys()} if contact else None,"ocr_text":ocr.raw_text if ocr else "","review_flags":contact.review_flags if contact else {}}
+    return {"id":c.id,"status":c.status,"image_url":f"/api/cards/{c.id}/image","contact":{k:getattr(contact,k) for k in Contact.__table__.columns.keys()} if contact else None,"ocr_text":ocr.raw_text if ocr else "","review_flags":contact.review_flags if contact else {},"orientation":c.orientation}
 @app.delete("/api/cards/{card_id}")
 def remove_card(card_id: str, db: Session=Depends(get_db), user: User=Depends(current_user)):
     card=card_for_user(card_id,db,user)
     record_audit(db,user,"delete","card",card_id,delete_card(card,db)); db.commit(); return {"deleted":True}
 @app.get("/api/cards/{card_id}/image")
-def card_image(card_id: str, db: Session=Depends(get_db), user: User=Depends(current_user)): return FileResponse(card_for_user(card_id,db,user).corrected_image_path)
+def card_image(card_id: str, db: Session=Depends(get_db), user: User=Depends(current_user)):
+    card=card_for_user(card_id,db,user); return FileResponse(card.oriented_image_path or card.corrected_image_path)
 @app.get("/api/cards/{card_id}/thumbnail")
 def card_thumb(card_id: str, db: Session=Depends(get_db), user: User=Depends(current_user)):
     card=card_for_user(card_id,db,user)
@@ -290,3 +294,11 @@ async def reprocess(card_id: str, body: ReprocessInput, db: Session=Depends(get_
         if body.llm: await structure(c,db)
     except ValueError as exc: raise HTTPException(502, str(exc)) from exc
     return {"status":c.status}
+@app.post("/api/cards/{card_id}/orientation")
+async def set_orientation(card_id: str, body: OrientationInput, db: Session=Depends(get_db), user: User=Depends(current_user)):
+    c=card_for_user(card_id,db,user)
+    try:
+        apply_orientation(c, db, body.rotation)
+        await run_ocr(c, db); await structure(c, db)
+    except ValueError as exc: raise HTTPException(502, str(exc)) from exc
+    return {"status":c.status,"orientation":c.orientation}

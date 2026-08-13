@@ -500,6 +500,8 @@ body {
   -webkit-user-select: none;
   -webkit-touch-callout: none;
 }
+.card-image img.card-image__rotated { max-height: none; max-width: 100%; transform-origin: center; }
+.orientation-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 
 .card-image__hint {
   position: absolute;
