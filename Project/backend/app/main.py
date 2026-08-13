@@ -9,7 +9,7 @@ from . import auth
 from .database import Base, SessionLocal, engine, get_db
 from .models import AuditLog, BusinessCard, Contact, Group, OCRResult, Organization, Photo, TrustedDevice, User, UserGroup
 from .schemas import BatchConfirmInput, CompleteReviewInput, ContactInput, GroupInput, LoginInput, ManualCardInput, OrientationInput, OrganizationInput, PasswordResetInput, ReprocessInput, TotpInput, UserInput
-from .services import add_manual_card, apply_orientation, card_thumbnail, delete_card, delete_photo, image_size, photo_thumbnail, process_card, process_photo, run_ocr, structure
+from .services import add_manual_card, apply_orientation, card_thumbnail, delete_card, delete_photo, image_size, photo_thumbnail, process_card, process_photo, recognize_card, run_ocr, structure
 from .settings import settings
 
 # サムネイルは中身が変わらず、変われば元の名刺ごと別IDになる。
@@ -285,7 +285,9 @@ def confirm(card_id: str, db: Session=Depends(get_db), user: User=Depends(curren
 async def reprocess(card_id: str, body: ReprocessInput, db: Session=Depends(get_db), user: User=Depends(current_user)):
     c=card_for_user(card_id,db,user)
     try:
-        if body.ocr: await run_ocr(c,db)
+        # 「もう一度読み取る」を押すのは結果がおかしいときで、向き違いはその有力な原因。
+        # 現在の向きに固定せず、探索からやり直す。
+        if body.ocr: await recognize_card(c,db)
         if body.llm: await structure(c,db)
     except ValueError as exc: raise HTTPException(502, str(exc)) from exc
     return {"status":c.status}

@@ -21,7 +21,7 @@ A Contact explicitly accepted by a user as the registered record.
 _Avoid_: Auto-registered contact
 
 **Recognition Result**:
-OCR text blocks and structured-field candidates derived from a Business Card, which remain reviewable evidence rather than confirmed data. Re-recognition after a Reading Orientation correction adds a new result without replacing the earlier one.
+OCR text blocks and structured-field candidates derived from a Business Card, which remain reviewable evidence rather than confirmed data. Re-recognition after a Reading Orientation correction adds a new result without replacing the earlier one. Only the reading that settles the Reading Orientation becomes a Recognition Result; the rotations tried and discarded are kept as processing history instead.
 _Avoid_: Contact, final result
 
 **Best-effort Recognition**:
@@ -41,7 +41,7 @@ The process that identifies Business Card candidates and their four corners in a
 _Avoid_: OCR, rectangular cropping
 
 **Reading Orientation**:
-The rotation of 0, 90, 180, or 270 degrees that presents the printed content of a perspective-corrected Business Card upright for recognition. Every perspective-corrected Business Card receives an image-AI orientation check before OCR, and the user can correct it in 90-degree steps before re-recognition. An unknown orientation leaves the image unrotated and is surfaced for user correction; manual rotation previews before it is committed and re-recognised. The orientation-corrected image is retained separately from the perspective-corrected image.
+The rotation of 0, 90, 180, or 270 degrees that presents the printed content of a perspective-corrected Business Card upright for recognition. It is not asked of the image AI but derived from recognition itself: each right-angle rotation is read in turn and scored by how many business-card elements the reading contains, and the first reading to reach the acceptance threshold settles the orientation. When no rotation reaches it, the highest-scoring one is used. The user can correct the orientation in 90-degree steps, previewing before it is committed and re-recognised; a user-supplied orientation is read as given rather than searched. The orientation-corrected image is retained separately from the perspective-corrected image.
 _Avoid_: Card angle, image rotation
 
 **Retry Required**:
