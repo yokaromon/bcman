@@ -1,0 +1,32 @@
+{
+  "name": "BCMan 名刺管理",
+  "short_name": "BCMan",
+  "description": "名刺OCR・連絡先管理",
+  "start_url": "/bcman/",
+  "scope": "/bcman/",
+  "display": "standalone",
+  "background_color": "#f5f5f5",
+  "theme_color": "#1769c2",
+  "orientation": "any",
+  "lang": "ja",
+  "icons": [
+    {
+      "src": "/bcman/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/bcman/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/bcman/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
