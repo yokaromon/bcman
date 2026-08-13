@@ -37,7 +37,7 @@ A user-created Business Card in a Photo where at least one card was detected aut
 _Avoid_: Retaking a photo, rectangular crop
 
 **Card Detection**:
-The process that identifies Business Card candidates and their four corners in a Photo. It uses local image contours first and an image-AI fallback when fewer than eight candidates are found or any local candidate is too uncertain. Overlapping results for the same physical card become one candidate, using the image-AI corners when available.
+The process that identifies Business Card candidates and their four corners in a Photo. It uses local image contours first and an image-AI fallback when fewer than eight candidates are found or any local candidate is too uncertain. Image-AI corners are expressed as fractions of the Photo and converted into its pixel space; malformed or out-of-range image-AI candidates are discarded. Overlapping results for the same physical card become one candidate, using the image-AI corners when available.
 _Avoid_: OCR, rectangular cropping
 
 **Reading Orientation**:

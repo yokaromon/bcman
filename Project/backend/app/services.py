@@ -15,7 +15,7 @@ STRUCTURE_PROMPT = """次のOCR原文から名刺情報をJSONだけで抽出し
 
 OCR_MAX_EDGE = 1600
 OCR_JPEG_QUALITY = 85
-DETECTION_PROMPT = """Find every business card in this image. Return JSON only: {\"cards\":[{\"corners\":[[x,y],[x,y],[x,y],[x,y]],\"rotation\":0|90|180|270|null}]}. Coordinates are pixels in the original image, corners ordered top-left, top-right, bottom-right, bottom-left. rotation is the clockwise turn needed to make text upright; use null when uncertain. Return an empty array only if no card is visible."""
+DETECTION_PROMPT = """Find every business card in this image. Return JSON only: {\"cards\":[{\"corners\":[[x,y],[x,y],[x,y],[x,y]],\"rotation\":0|90|180|270|null}]}. Each x and y corner coordinate must be a fraction from 0.0 to 1.0 of the image width and height respectively, never pixels. Corners are ordered top-left, top-right, bottom-right, bottom-left. rotation is the clockwise turn needed to make text upright; use null when uncertain. Return an empty array only if no card is visible."""
 ORIENTATION_PROMPT = "Return JSON only: {\"rotation\":0|90|180|270|null}. Choose the clockwise rotation needed to make the business card text upright for reading. Return null when uncertain."
 
 THUMBNAIL_MAX_EDGE = 800
@@ -154,9 +154,10 @@ async def improve_detection(photo: Photo, db: Session):
     except (json.JSONDecodeError, AttributeError): return
     image = cv2.imread(str(Path(photo.storage_path)))
     if image is None: return
+    height, width = image.shape[:2]
     for item in proposed:
-        corners = item.get("corners", []) if isinstance(item, dict) else []
-        if len(corners) != 4: continue
+        corners = _source_corners(item.get("corners", []) if isinstance(item, dict) else [], width, height)
+        if corners is None: continue
         points = np.float32(corners); x, y, w, h = cv2.boundingRect(points.astype(np.int32))
         # 同一物理名刺の重複を抑える（矩形IoU）。AI結果を優先して既存候補を置換する代わりに、
         # 既存の切り出しファイルは残さない。
@@ -168,6 +169,15 @@ async def improve_detection(photo: Photo, db: Session):
         if rotation in {0, 90, 180, 270}: apply_orientation(card, db, rotation, automatic=True)
         local_cards.append(card)
     db.commit()
+
+def _source_corners(corners, width: int, height: int):
+    """画像AIの割合座標を原画像のピクセル座標へ変換する。不正形式は推測しない。"""
+    if not isinstance(corners, list) or len(corners) != 4: return None
+    try:
+        normalized = [(float(x), float(y)) for x, y in corners]
+    except (TypeError, ValueError): return None
+    if any(not 0 <= x <= 1 or not 0 <= y <= 1 for x, y in normalized): return None
+    return [[x * width, y * height] for x, y in normalized]
 
 def _iou(a, b):
     ax, ay, aw, ah = a; bx, by, bw, bh = b
