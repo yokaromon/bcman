@@ -9,7 +9,7 @@ from . import auth
 from .database import Base, SessionLocal, engine, get_db
 from .models import AuditLog, BusinessCard, Contact, Group, OCRResult, Organization, Photo, TrustedDevice, User, UserGroup
 from .schemas import BatchConfirmInput, CompleteReviewInput, ContactInput, GroupInput, LoginInput, ManualCardInput, OrientationInput, OrganizationInput, PasswordResetInput, ReprocessInput, TotpInput, UserInput
-from .services import add_manual_card, apply_orientation, card_thumbnail, delete_card, delete_photo, detect_cards, image_size, photo_thumbnail, process_card, process_photo, run_ocr, structure
+from .services import add_manual_card, apply_orientation, card_thumbnail, delete_card, delete_photo, image_size, photo_thumbnail, process_card, process_photo, run_ocr, structure
 from .settings import settings
 
 # サムネイルは中身が変わらず、変われば元の名刺ごと別IDになる。
@@ -203,11 +203,6 @@ def photo_thumb(photo_id: str, db: Session=Depends(get_db), user: User=Depends(c
     if not photo: raise HTTPException(404,"写真が見つかりません")
     if not photo.storage_path: raise HTTPException(404,"撮影原本は削除済みです")
     return thumbnail_response(lambda: photo_thumbnail(photo))
-@app.post("/api/photos/{photo_id}/detect")
-def detect(photo_id: str, db: Session=Depends(get_db), user: User=Depends(current_user)):
-    photo=visible_photo_query(db,user).filter_by(id=photo_id).first()
-    if not photo: raise HTTPException(404,"写真が見つかりません")
-    detect_cards(photo, db); return {"photo_id":photo.id,"detected_count":db.query(BusinessCard).filter_by(photo_id=photo.id).count()}
 @app.post("/api/photos/{photo_id}/cards")
 def add_card(photo_id: str, body: ManualCardInput, tasks: BackgroundTasks, db: Session=Depends(get_db), user: User=Depends(current_user)):
     photo=visible_photo_query(db,user).filter_by(id=photo_id).first()

@@ -15,8 +15,19 @@ STRUCTURE_PROMPT = """次のOCR原文から名刺情報をJSONだけで抽出し
 
 OCR_MAX_EDGE = 1600
 OCR_JPEG_QUALITY = 85
-DETECTION_PROMPT = """Find every business card in this image. Return JSON only: {\"cards\":[{\"corners\":[[x,y],[x,y],[x,y],[x,y]],\"rotation\":0|90|180|270|null}]}. Each x and y corner coordinate must be a fraction from 0.0 to 1.0 of the image width and height respectively, never pixels. Corners are ordered top-left, top-right, bottom-right, bottom-left. rotation is the clockwise turn needed to make text upright; use null when uncertain. Return an empty array only if no card is visible."""
 ORIENTATION_PROMPT = "Return JSON only: {\"rotation\":0|90|180|270|null}. Choose the clockwise rotation needed to make the business card text upright for reading. Return null when uncertain."
+
+# 名刺の実寸 91×55mm は比 1.65。斜めから撮ったときの透視短縮でずれる分だけ幅を持たせる。
+CARD_ASPECT_MIN, CARD_ASPECT_MAX = 1.35, 2.10
+# 下限は8枚並べの1枚を通す値。上限は「写真全体に近い輪郭」を名刺と見なさないための値。
+CARD_AREA_MIN_RATIO, CARD_AREA_MAX_RATIO = .015, .60
+# 検出が暴走したときにOCRの実行回数を抑える安全弁。品質目標の8枚より少しだけ余裕を持たせる。
+CARD_LIMIT = 12
+# 同じ名刺から出た内外の輪郭や文字ブロックは、片方がもう片方にほぼ収まる。
+# IoU ではなく「小さい方の面積に対する重なり率」で見るのは、接して置いた別の名刺を消さないため。
+CARD_CONTAINMENT = .6
+CARD_APPROX_EPSILON_RATIO = .02
+CARD_EDGE_CLOSE_KERNEL = 5
 
 THUMBNAIL_MAX_EDGE = 800
 THUMBNAIL_JPEG_QUALITY = 80
@@ -98,8 +109,20 @@ def review_flags(values: dict) -> dict:
     if website and not website.startswith(("http://", "https://")): flags["website"] = "URLを確認してください"
     return flags
 
+def _ordered_corners(corners):
+    """四隅を左上・右上・右下・左下の順に整える。
+    getPerspectiveTransform はこの順序を前提にしていて、順序が崩れると鏡像・せん断した
+    切り抜きになる。重心まわりの角度で並べるのは、どの点も1度ずつ使われることを保証するため
+    （和・差の最大最小で選ぶと、正方形に近い四角形で同じ点が二度選ばれて変換が壊れる）。"""
+    points = np.float32(corners).reshape(-1, 2)
+    center = points.mean(axis=0)
+    # 画像座標はyが下向きなので、角度の昇順がそのまま時計回りになる
+    clockwise = points[np.argsort(np.arctan2(points[:, 1] - center[1], points[:, 0] - center[0]))]
+    top_left = int(np.argmin(clockwise.sum(axis=1)))
+    return np.float32(np.roll(clockwise, -top_left, axis=0))
+
 def _write_card(photo: Photo, db: Session, image, corners, confidence=.75):
-    points = np.float32(corners)
+    points = _ordered_corners(corners)
     x, y, w, h = cv2.boundingRect(points.astype(np.int32))
     card = BusinessCard(photo_id=photo.id, detected_image_path="", corrected_image_path="", detection_confidence=confidence, x=x, y=y, width=w, height=h)
     db.add(card); db.flush()
@@ -115,26 +138,67 @@ def _write_card(photo: Photo, db: Session, image, corners, confidence=.75):
     card.detected_image_path, card.corrected_image_path, card.oriented_image_path, card.orientation, card.status = str(detected), str(corrected), str(oriented), 0, "corrected"
     return card
 
+def _quad_from_contour(contour):
+    """輪郭を四角形の四隅にする。4頂点に近似できるならその形をそのまま使い、台形の歪みも拾う。
+    できないときは最小面積の回転矩形で近似する。軸平行の外接矩形を使わないのは、斜めに置いた
+    名刺だと外接矩形の比が正方形に寄って名刺と判定できず、枠も隣の名刺まで巻き込むため。"""
+    approx = cv2.approxPolyDP(contour, CARD_APPROX_EPSILON_RATIO * cv2.arcLength(contour, True), True)
+    if len(approx) == 4: return approx.reshape(4, 2).astype(np.float32)
+    return cv2.boxPoints(cv2.minAreaRect(contour)).astype(np.float32)
+
+def _looks_like_card(quad, photo_area: float) -> bool:
+    (_, _), (rect_width, rect_height), _ = cv2.minAreaRect(quad)
+    short_edge, long_edge = min(rect_width, rect_height), max(rect_width, rect_height)
+    if short_edge <= 0: return False
+    within_shape = CARD_ASPECT_MIN <= long_edge / short_edge <= CARD_ASPECT_MAX
+    within_size = CARD_AREA_MIN_RATIO <= cv2.contourArea(quad) / photo_area <= CARD_AREA_MAX_RATIO
+    return within_shape and within_size
+
+def _containment(a, b) -> float:
+    """2つの矩形の重なりを、小さい方の面積に対する割合で返す。"""
+    ax, ay, aw, ah = a; bx, by, bw, bh = b
+    ix, iy = max(ax, bx), max(ay, by); ex, ey = min(ax+aw, bx+bw), min(ay+ah, by+bh)
+    intersection = max(0, ex-ix) * max(0, ey-iy)
+    return intersection / max(1, min(aw*ah, bw*bh))
+
+def card_quads(image):
+    """写真から名刺候補の四隅を、上の行から・行内は左から並べて返す。"""
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    edges = cv2.Canny(cv2.GaussianBlur(gray, (5, 5), 0), 50, 150)
+    # Canny のエッジは途切れるので、閉じてから輪郭を取らないと1枚の名刺が断片に割れる
+    closed = cv2.morphologyEx(edges, cv2.MORPH_CLOSE, np.ones((CARD_EDGE_CLOSE_KERNEL, CARD_EDGE_CLOSE_KERNEL), np.uint8))
+    # RETR_EXTERNAL にするのは、名刺の枠線の内側や文字ブロックを別の候補として数えないため
+    contours, _ = cv2.findContours(closed, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    height, width = image.shape[:2]
+    photo_area = float(max(1, width * height))
+    found = [quad for quad in (_quad_from_contour(contour) for contour in contours) if _looks_like_card(quad, photo_area)]
+    found.sort(key=cv2.contourArea, reverse=True)
+    accepted = []
+    for quad in found:
+        box = cv2.boundingRect(quad.astype(np.int32))
+        # 大きい順に見ているので、採用済みの候補に収まるものは同じ名刺の内側の輪郭とみなせる
+        overlapped = any(_containment(box, taken) > CARD_CONTAINMENT for _, taken in accepted)
+        if overlapped: continue
+        accepted.append((quad, box))
+        if len(accepted) >= CARD_LIMIT: break
+    # 輪郭の走査順は写真上の配置と無関係（右下の名刺が先頭になることがある）。
+    # 画面では順にめくって確認するので、上の行から・行内は左からの順に並べ替える。
+    # 行の判定に自身の高さを使うと、横に並んだ名刺のわずかなy差では行が割れない。
+    accepted.sort(key=lambda item: (item[1][1] // max(item[1][3], 1), item[1][0]))
+    return [_ordered_corners(quad).tolist() for quad, _ in accepted]
+
 def detect_cards(photo: Photo, db: Session):
     source = Path(photo.storage_path)
     image = cv2.imread(str(source))
     if image is None: raise ValueError("画像を読み込めません")
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    edges = cv2.Canny(cv2.GaussianBlur(gray, (5, 5), 0), 50, 150)
-    contours, _ = cv2.findContours(edges, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
-    height, width = image.shape[:2]; candidates = []
-    for contour in contours:
-        x, y, w, h = cv2.boundingRect(contour); area = w * h
-        ratio = max(w / max(h, 1), h / max(w, 1))
-        if area > width * height * .04 and 1.25 <= ratio <= 2.4:
-            if not any(abs(x-a[0]) < 10 and abs(y-a[1]) < 10 for a in candidates): candidates.append((x, y, w, h))
-    # 0枚は写真全体を名刺として扱わない。ユーザーに撮り直しを促す。
-    # 輪郭の走査順は写真上の配置と無関係（右下の名刺が先頭になることがある）。
-    # 画面では順にめくって確認するので、上の行から・行内は左からの順に並べ替える。
-    # 行の判定に自身の高さを使うと、横に並んだ名刺のわずかなy差では行が割れない。
-    candidates.sort(key=lambda box: (box[1] // max(box[3], 1), box[0]))
-    for x, y, w, h in candidates:
-        _write_card(photo, db, image, [[x,y],[x+w,y],[x+w,y+h],[x,y+h]])
+    quads = card_quads(image)
+    if quads:
+        for corners in quads: _write_card(photo, db, image, corners)
+    else:
+        # 名刺1枚を画面いっぱいに撮ると外形が画面端に接し、輪郭として出てこない。
+        # 撮り直しを求める前に、写真全体を1枚として確度を下げて拾う。
+        height, width = image.shape[:2]
+        _write_card(photo, db, image, [[0,0],[width-1,0],[width-1,height-1],[0,height-1]], .2)
     photo.status = "detected"; db.commit()
 
 def add_manual_card(photo: Photo, db: Session, corners):
@@ -143,47 +207,6 @@ def add_manual_card(photo: Photo, db: Session, corners):
     height, width = image.shape[:2]
     if any(x < 0 or y < 0 or x >= width or y >= height for x, y in corners): raise ValueError("四隅は写真の範囲内で指定してください")
     card = _write_card(photo, db, image, corners, 1.0); db.commit(); return card
-
-async def improve_detection(photo: Photo, db: Session):
-    """輪郭候補が品質目標未満のときだけ画像AIで四隅を補う。"""
-    local_cards = db.query(BusinessCard).filter_by(photo_id=photo.id).all()
-    if len(local_cards) >= 8 and all(card.detection_confidence >= .5 for card in local_cards): return
-    encoded = encode_for_ocr(Path(photo.storage_path))
-    content, _ = await chat([{"role":"user","content":[{"type":"text","text":DETECTION_PROMPT},{"type":"image_url","image_url":{"url":f"data:image/jpeg;base64,{encoded}"}}]}])
-    try: proposed = json.loads(content.removeprefix("```json").removesuffix("```").strip()).get("cards", [])
-    except (json.JSONDecodeError, AttributeError): return
-    image = cv2.imread(str(Path(photo.storage_path)))
-    if image is None: return
-    height, width = image.shape[:2]
-    for item in proposed:
-        corners = _source_corners(item.get("corners", []) if isinstance(item, dict) else [], width, height)
-        if corners is None: continue
-        points = np.float32(corners); x, y, w, h = cv2.boundingRect(points.astype(np.int32))
-        # 同一物理名刺の重複を抑える（矩形IoU）。AI結果を優先して既存候補を置換する代わりに、
-        # 既存の切り出しファイルは残さない。
-        duplicate = next((card for card in local_cards if _iou((x,y,w,h), (card.x,card.y,card.width,card.height)) > .5), None)
-        if duplicate:
-            shutil.rmtree(Path(duplicate.corrected_image_path).parent, ignore_errors=True); db.delete(duplicate); db.flush(); local_cards.remove(duplicate)
-        card = _write_card(photo, db, image, corners, .9)
-        rotation = item.get("rotation") if isinstance(item, dict) else None
-        if rotation in {0, 90, 180, 270}: apply_orientation(card, db, rotation, automatic=True)
-        local_cards.append(card)
-    db.commit()
-
-def _source_corners(corners, width: int, height: int):
-    """画像AIの割合座標を原画像のピクセル座標へ変換する。不正形式は推測しない。"""
-    if not isinstance(corners, list) or len(corners) != 4: return None
-    try:
-        normalized = [(float(x), float(y)) for x, y in corners]
-    except (TypeError, ValueError): return None
-    if any(not 0 <= x <= 1 or not 0 <= y <= 1 for x, y in normalized): return None
-    return [[x * width, y * height] for x, y in normalized]
-
-def _iou(a, b):
-    ax, ay, aw, ah = a; bx, by, bw, bh = b
-    ix, iy = max(ax,bx), max(ay,by); ex, ey = min(ax+aw,bx+bw), min(ay+ah,by+bh)
-    intersection = max(0, ex-ix) * max(0, ey-iy)
-    return intersection / max(1, aw*ah + bw*bh - intersection)
 
 async def chat(messages):
     if not settings.ai_api_key or not settings.ai_model: raise ValueError("AI_API_KEY と AI_MODEL を .env に設定してください")
@@ -259,9 +282,6 @@ async def process_photo(photo_id: str, db: Session):
     photo = db.get(Photo, photo_id)
     try:
         photo.status = "detecting"; db.commit(); detect_cards(photo, db)
-        # フォールバック自体のAPI障害で、ローカル検出済み候補まで失わない。
-        try: await improve_detection(photo, db)
-        except Exception: db.rollback()
         card_ids = [card.id for card in db.query(BusinessCard).filter_by(photo_id=photo.id).all()]
         if not card_ids: photo.status = "failed"; db.commit(); return
         semaphore = asyncio.Semaphore(3)

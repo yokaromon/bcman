@@ -25,11 +25,11 @@ OCR text blocks and structured-field candidates derived from a Business Card, wh
 _Avoid_: Contact, final result
 
 **Best-effort Recognition**:
-Recognition that queues every detected Business Card from a Photo without rejecting it solely for the number of cards. Eight cards is the quality target; larger sets may take longer or need more review.
+Recognition that queues every detected Business Card from a Photo without rejecting it solely for the number of cards. Eight cards is the quality target; larger sets may take longer or need more review. Card Detection still caps how many candidates one Photo may yield, so a Photo crowded well beyond the target is recognised only in part.
 _Avoid_: Maximum-card limit, batch rejection
 
 **Detection Failure**:
-The outcome in which no Business Card is detected from a Photo. It ends that Photo's recognition attempt and asks the user to retake the Photo.
+The outcome in which no Business Card candidate is found in a Photo. The whole Photo then becomes a single low-confidence Business Card rather than ending the attempt, because a single card filling the frame leaves no detectable outline. The user is asked to retake the Photo only when that candidate cannot be recognised either.
 _Avoid_: OCR failure, unreadable card
 
 **Manual Card Addition**:
@@ -37,11 +37,11 @@ A user-created Business Card in a Photo where at least one card was detected aut
 _Avoid_: Retaking a photo, rectangular crop
 
 **Card Detection**:
-The process that identifies Business Card candidates and their four corners in a Photo. It uses local image contours first and an image-AI fallback when fewer than eight candidates are found or any local candidate is too uncertain. Image-AI corners are expressed as fractions of the Photo and converted into its pixel space; malformed or out-of-range image-AI candidates are discarded. Overlapping results for the same physical card become one candidate, using the image-AI corners when available.
+The process that identifies Business Card candidates and their four corners in a Photo, using local image contours only. Each candidate is a rotated rectangle or a four-point approximation of one contour, kept when its proportion and size are card-like. A candidate largely contained in a larger one is treated as the same physical card and dropped, and the number of candidates is capped as a cost safety valve. Corners are ordered clockwise from the top-left, and candidates are presented top row first, left to right within a row.
 _Avoid_: OCR, rectangular cropping
 
 **Reading Orientation**:
-The rotation of 0, 90, 180, or 270 degrees that presents the printed content of a perspective-corrected Business Card upright for recognition. Image-AI Card Detection infers it together with the corners; locally detected cards also receive an image-AI orientation check before OCR, and the user can correct it in 90-degree steps before re-recognition. An unknown orientation leaves the image unrotated and is surfaced for user correction; manual rotation previews before it is committed and re-recognised. The orientation-corrected image is retained separately from the perspective-corrected image.
+The rotation of 0, 90, 180, or 270 degrees that presents the printed content of a perspective-corrected Business Card upright for recognition. Every perspective-corrected Business Card receives an image-AI orientation check before OCR, and the user can correct it in 90-degree steps before re-recognition. An unknown orientation leaves the image unrotated and is surfaced for user correction; manual rotation previews before it is committed and re-recognised. The orientation-corrected image is retained separately from the perspective-corrected image.
 _Avoid_: Card angle, image rotation
 
 **Retry Required**:
