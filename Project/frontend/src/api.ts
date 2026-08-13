@@ -45,6 +45,7 @@ export type PhotoSummary = {
   created_at: string;
   card_count: number;
   confirmed_count: number;
+  source_retained: boolean;
 };
 
 export type PhotoStatus = 'uploaded' | 'detecting' | 'detected' | 'completed' | 'failed';
@@ -56,7 +57,8 @@ export type CardStatus =
   | 'ocr_completed'
   | 'llm_processing'
   | 'review_required'
-  | 'confirmed';
+  | 'confirmed'
+  | 'retry_required';
 
 export type CardSummary = {
   id: string;
@@ -99,6 +101,7 @@ export type CardDetail = {
   image_url: string;
   contact: Contact | null;
   ocr_text: string;
+  review_flags: Partial<Record<ContactField, string>>;
 };
 
 export class ApiError extends Error {
@@ -228,8 +231,8 @@ export function fetchCard(cardId: string): Promise<CardDetail> {
   return request<CardDetail>(`/cards/${cardId}`);
 }
 
-export function saveContact(cardId: string, contact: ContactInput): Promise<Contact> {
-  return request<Contact>(`/cards/${cardId}/contact`, jsonInit('PUT', contact));
+export function saveContact(cardId: string, contact: ContactInput, resolvedFields: ContactField[] = []): Promise<Contact> {
+  return request<Contact>(`/cards/${cardId}/contact`, jsonInit('PUT', { ...contact, resolved_fields: resolvedFields }));
 }
 
 export function confirmCard(cardId: string): Promise<{ status: string }> {
@@ -243,6 +246,15 @@ export function reprocessCard(cardId: string): Promise<{ status: CardStatus }> {
 export function deletePhoto(photoId: string): Promise<{ deleted: boolean }> {
   return request<{ deleted: boolean }>(`/photos/${photoId}`, { method: 'DELETE' });
 }
+export function completeReview(photoId: string, retainPhoto: boolean): Promise<{ source_retained: boolean }> {
+  return request(`/photos/${photoId}/complete-review`, jsonInit('POST', { retain_photo: retainPhoto }));
+}
+export function addManualCard(photoId: string, corners: Array<[number, number]>): Promise<{ id: string; status: CardStatus }> {
+  return request(`/photos/${photoId}/cards`, jsonInit('POST', { corners }));
+}
+export function confirmCards(photoId: string, cardIds: string[]): Promise<{ confirmed_count: number }> {
+  return request(`/photos/${photoId}/confirm-cards`, jsonInit('POST', { card_ids: cardIds }));
+}
 
 export function deleteCard(cardId: string): Promise<{ deleted: boolean }> {
   return request<{ deleted: boolean }>(`/cards/${cardId}`, { method: 'DELETE' });
@@ -250,7 +262,7 @@ export function deleteCard(cardId: string): Promise<{ deleted: boolean }> {
 
 /** 確認画面に出せる状態か。これ以外は解析途中か失敗のいずれか。 */
 export function isCardReady(status: CardStatus): boolean {
-  return status === 'review_required' || status === 'confirmed';
+  return status === 'review_required' || status === 'confirmed' || status === 'retry_required';
 }
 
 export function emptyContactInput(): ContactInput {
@@ -280,6 +292,7 @@ const CARD_STATUS_LABELS: Record<CardStatus, string> = {
   llm_processing: '内容を整理中',
   review_required: '確認できます',
   confirmed: '登録済み',
+  retry_required: '要再試行',
 };
 
 export function cardStatusLabel(status: CardStatus): string {

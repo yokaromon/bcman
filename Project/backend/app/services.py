@@ -1,4 +1,4 @@
-import base64, json, shutil
+import asyncio, base64, json, shutil
 from io import BytesIO
 from pathlib import Path
 import cv2
@@ -15,6 +15,7 @@ STRUCTURE_PROMPT = """次のOCR原文から名刺情報をJSONだけで抽出し
 
 OCR_MAX_EDGE = 1600
 OCR_JPEG_QUALITY = 85
+DETECTION_PROMPT = """Find every business card in this image. Return JSON only: {\"cards\":[{\"corners\":[[x,y],[x,y],[x,y],[x,y]]}]}. Coordinates are pixels in the original image, corners ordered top-left, top-right, bottom-right, bottom-left. Return an empty array only if no card is visible."""
 
 THUMBNAIL_MAX_EDGE = 800
 THUMBNAIL_JPEG_QUALITY = 80
@@ -85,6 +86,34 @@ def encode_for_ocr(path: Path) -> str:
         prepared.save(buffer, format="JPEG", quality=OCR_JPEG_QUALITY)
     return base64.b64encode(buffer.getvalue()).decode()
 
+def review_flags(values: dict) -> dict:
+    flags = {}
+    email = values.get("email")
+    if email and ("@" not in email or email.startswith("@") or email.endswith("@")): flags["email"] = "形式を確認してください"
+    for field in ("telephone", "fax", "mobile"):
+        value = values.get(field)
+        if value and len("".join(c for c in value if c.isdigit())) < 6: flags[field] = "形式を確認してください"
+    website = values.get("website")
+    if website and not website.startswith(("http://", "https://")): flags["website"] = "URLを確認してください"
+    return flags
+
+def _write_card(photo: Photo, db: Session, image, corners, confidence=.75):
+    points = np.float32(corners)
+    x, y, w, h = cv2.boundingRect(points.astype(np.int32))
+    card = BusinessCard(photo_id=photo.id, detected_image_path="", corrected_image_path="", detection_confidence=confidence, x=x, y=y, width=w, height=h)
+    db.add(card); db.flush()
+    target = settings.storage_dir / "photos" / photo.id / "cards" / card.id; target.mkdir(parents=True, exist_ok=True)
+    # 四隅から台形補正する。出力サイズは対辺の長い方を使うため、斜めの名刺でも文字を潰さない。
+    widths = [np.linalg.norm(points[1]-points[0]), np.linalg.norm(points[2]-points[3])]
+    heights = [np.linalg.norm(points[3]-points[0]), np.linalg.norm(points[2]-points[1])]
+    out_w, out_h = max(1, round(max(widths))), max(1, round(max(heights)))
+    transform = cv2.getPerspectiveTransform(points, np.float32([[0,0],[out_w-1,0],[out_w-1,out_h-1],[0,out_h-1]]))
+    corrected_image = cv2.warpPerspective(image, transform, (out_w, out_h))
+    detected = target / "detected.jpg"; corrected = target / "corrected.jpg"
+    cv2.imwrite(str(detected), image[max(0,y):max(0,y)+h, max(0,x):max(0,x)+w]); cv2.imwrite(str(corrected), corrected_image)
+    card.detected_image_path, card.corrected_image_path, card.status = str(detected), str(corrected), "corrected"
+    return card
+
 def detect_cards(photo: Photo, db: Session):
     source = Path(photo.storage_path)
     image = cv2.imread(str(source))
@@ -98,19 +127,49 @@ def detect_cards(photo: Photo, db: Session):
         ratio = max(w / max(h, 1), h / max(w, 1))
         if area > width * height * .04 and 1.25 <= ratio <= 2.4:
             if not any(abs(x-a[0]) < 10 and abs(y-a[1]) < 10 for a in candidates): candidates.append((x, y, w, h))
-    if not candidates: candidates = [(0, 0, width, height)]
+    # 0枚は写真全体を名刺として扱わない。ユーザーに撮り直しを促す。
     # 輪郭の走査順は写真上の配置と無関係（右下の名刺が先頭になることがある）。
     # 画面では順にめくって確認するので、上の行から・行内は左からの順に並べ替える。
     # 行の判定に自身の高さを使うと、横に並んだ名刺のわずかなy差では行が割れない。
     candidates.sort(key=lambda box: (box[1] // max(box[3], 1), box[0]))
-    for x, y, w, h in candidates[:10]:
-        card = BusinessCard(photo_id=photo.id, detected_image_path="", corrected_image_path="", detection_confidence=.75 if len(candidates) else .2, x=x, y=y, width=w, height=h)
-        db.add(card); db.flush()
-        target = settings.storage_dir / "photos" / photo.id / "cards" / card.id; target.mkdir(parents=True, exist_ok=True)
-        crop = image[y:y+h, x:x+w]; detected = target / "detected.jpg"; corrected = target / "corrected.jpg"
-        cv2.imwrite(str(detected), crop); cv2.imwrite(str(corrected), crop)
-        card.detected_image_path, card.corrected_image_path, card.status = str(detected), str(corrected), "corrected"
+    for x, y, w, h in candidates:
+        _write_card(photo, db, image, [[x,y],[x+w,y],[x+w,y+h],[x,y+h]])
     photo.status = "detected"; db.commit()
+
+def add_manual_card(photo: Photo, db: Session, corners):
+    image = cv2.imread(str(Path(photo.storage_path)))
+    if image is None: raise ValueError("画像を読み込めません")
+    height, width = image.shape[:2]
+    if any(x < 0 or y < 0 or x >= width or y >= height for x, y in corners): raise ValueError("四隅は写真の範囲内で指定してください")
+    card = _write_card(photo, db, image, corners, 1.0); db.commit(); return card
+
+async def improve_detection(photo: Photo, db: Session):
+    """輪郭候補が品質目標未満のときだけ画像AIで四隅を補う。"""
+    local_cards = db.query(BusinessCard).filter_by(photo_id=photo.id).all()
+    if len(local_cards) >= 8 and all(card.detection_confidence >= .5 for card in local_cards): return
+    encoded = encode_for_ocr(Path(photo.storage_path))
+    content, _ = await chat([{"role":"user","content":[{"type":"text","text":DETECTION_PROMPT},{"type":"image_url","image_url":{"url":f"data:image/jpeg;base64,{encoded}"}}]}])
+    try: proposed = json.loads(content.removeprefix("```json").removesuffix("```").strip()).get("cards", [])
+    except (json.JSONDecodeError, AttributeError): return
+    image = cv2.imread(str(Path(photo.storage_path)))
+    if image is None: return
+    for item in proposed:
+        corners = item.get("corners", []) if isinstance(item, dict) else []
+        if len(corners) != 4: continue
+        points = np.float32(corners); x, y, w, h = cv2.boundingRect(points.astype(np.int32))
+        # 同一物理名刺の重複を抑える（矩形IoU）。AI結果を優先して既存候補を置換する代わりに、
+        # 既存の切り出しファイルは残さない。
+        duplicate = next((card for card in local_cards if _iou((x,y,w,h), (card.x,card.y,card.width,card.height)) > .5), None)
+        if duplicate:
+            shutil.rmtree(Path(duplicate.corrected_image_path).parent, ignore_errors=True); db.delete(duplicate); db.flush(); local_cards.remove(duplicate)
+        local_cards.append(_write_card(photo, db, image, corners, .9))
+    db.commit()
+
+def _iou(a, b):
+    ax, ay, aw, ah = a; bx, by, bw, bh = b
+    ix, iy = max(ax,bx), max(ay,by); ex, ey = min(ax+aw,bx+bw), min(ay+ah,by+bh)
+    intersection = max(0, ex-ix) * max(0, ey-iy)
+    return intersection / max(1, aw*ah + bw*bh - intersection)
 
 async def chat(messages):
     if not settings.ai_api_key or not settings.ai_model: raise ValueError("AI_API_KEY と AI_MODEL を .env に設定してください")
@@ -139,15 +198,38 @@ async def structure(card: BusinessCard, db: Session):
     values = {key: values.get(key) for key in CONTACT_FIELDS}
     contact = db.query(Contact).filter_by(card_id=card.id).first() or Contact(card_id=card.id)
     for key, value in values.items(): setattr(contact, key, value)
+    contact.review_flags = review_flags(values)
     db.add(contact); db.add(ProcessingHistory(card_id=card.id, process_type="llm", engine="ykr-multimodal", version=settings.ai_model, input_json={"raw_text":result.raw_text}, output_json=response))
     card.status = "review_required"; db.commit()
+
+async def _process_card(card_id: str):
+    from .database import SessionLocal
+    for attempt in range(2):
+        with SessionLocal() as db:
+            card = db.get(BusinessCard, card_id)
+            try:
+                await run_ocr(card, db); await structure(card, db); return
+            except Exception:
+                db.rollback()
+                if attempt:
+                    card = db.get(BusinessCard, card_id); card.status = "retry_required"; db.commit(); return
+
+async def process_card(card_id: str):
+    await _process_card(card_id)
 
 async def process_photo(photo_id: str, db: Session):
     photo = db.get(Photo, photo_id)
     try:
         photo.status = "detecting"; db.commit(); detect_cards(photo, db)
-        for card in db.query(BusinessCard).filter_by(photo_id=photo.id).all():
-            await run_ocr(card, db); await structure(card, db)
+        # フォールバック自体のAPI障害で、ローカル検出済み候補まで失わない。
+        try: await improve_detection(photo, db)
+        except Exception: db.rollback()
+        card_ids = [card.id for card in db.query(BusinessCard).filter_by(photo_id=photo.id).all()]
+        if not card_ids: photo.status = "failed"; db.commit(); return
+        semaphore = asyncio.Semaphore(3)
+        async def queued(card_id):
+            async with semaphore: await _process_card(card_id)
+        await asyncio.gather(*(queued(card_id) for card_id in card_ids))
         photo.status = "completed"; db.commit()
     except Exception as exc:
         photo.status = "failed"; db.commit(); raise exc

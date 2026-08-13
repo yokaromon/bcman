@@ -3,13 +3,13 @@ from pathlib import Path
 from fastapi import BackgroundTasks, Depends, FastAPI, File, HTTPException, Request, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
-from sqlalchemy import func
+from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 from . import auth
 from .database import Base, SessionLocal, engine, get_db
 from .models import AuditLog, BusinessCard, Contact, Group, OCRResult, Organization, Photo, TrustedDevice, User, UserGroup
-from .schemas import ContactInput, GroupInput, LoginInput, OrganizationInput, PasswordResetInput, ReprocessInput, TotpInput, UserInput
-from .services import card_thumbnail, delete_card, delete_photo, detect_cards, image_size, photo_thumbnail, process_photo, run_ocr, structure
+from .schemas import BatchConfirmInput, CompleteReviewInput, ContactInput, GroupInput, LoginInput, ManualCardInput, OrganizationInput, PasswordResetInput, ReprocessInput, TotpInput, UserInput
+from .services import add_manual_card, card_thumbnail, delete_card, delete_photo, detect_cards, image_size, photo_thumbnail, process_card, process_photo, run_ocr, structure
 from .settings import settings
 
 # サムネイルは中身が変わらず、変われば元の名刺ごと別IDになる。
@@ -23,6 +23,10 @@ def bootstrap():
     """Organization・初期管理者の作成はアプリ外（scripts/create_org.py）で行う。
     ここではテーブル作成のみ。"""
     Base.metadata.create_all(engine); settings.storage_dir.mkdir(parents=True, exist_ok=True)
+    if engine.dialect.name == "sqlite":
+        with engine.begin() as connection:
+            columns = {row[1] for row in connection.execute(text("PRAGMA table_info(contacts)"))}
+            if "review_flags" not in columns: connection.execute(text("ALTER TABLE contacts ADD COLUMN review_flags JSON DEFAULT '{}'"))
 @app.on_event("startup")
 def startup(): bootstrap()
 
@@ -184,7 +188,7 @@ def list_photos(db: Session=Depends(get_db), user: User=Depends(current_user)):
         query=db.query(BusinessCard.photo_id, func.count(BusinessCard.id)).filter(BusinessCard.photo_id.in_(ids), *conditions)
         return dict(query.group_by(BusinessCard.photo_id))
     total, confirmed = tally(), tally(BusinessCard.status=="confirmed")
-    return [{"id":p.id,"filename":p.original_filename,"status":p.status,"created_at":p.created_at,"card_count":total.get(p.id,0),"confirmed_count":confirmed.get(p.id,0)} for p in photos]
+    return [{"id":p.id,"filename":p.original_filename,"status":p.status,"created_at":p.created_at,"card_count":total.get(p.id,0),"confirmed_count":confirmed.get(p.id,0),"source_retained":bool(p.storage_path)} for p in photos]
 @app.delete("/api/photos/{photo_id}")
 def remove_photo(photo_id: str, db: Session=Depends(get_db), user: User=Depends(current_user)):
     photo=visible_photo_query(db,user).filter_by(id=photo_id).first()
@@ -194,12 +198,42 @@ def remove_photo(photo_id: str, db: Session=Depends(get_db), user: User=Depends(
 def photo_thumb(photo_id: str, db: Session=Depends(get_db), user: User=Depends(current_user)):
     photo=visible_photo_query(db,user).filter_by(id=photo_id).first()
     if not photo: raise HTTPException(404,"写真が見つかりません")
+    if not photo.storage_path: raise HTTPException(404,"撮影原本は削除済みです")
     return thumbnail_response(lambda: photo_thumbnail(photo))
 @app.post("/api/photos/{photo_id}/detect")
 def detect(photo_id: str, db: Session=Depends(get_db), user: User=Depends(current_user)):
     photo=visible_photo_query(db,user).filter_by(id=photo_id).first()
     if not photo: raise HTTPException(404,"写真が見つかりません")
     detect_cards(photo, db); return {"photo_id":photo.id,"detected_count":db.query(BusinessCard).filter_by(photo_id=photo.id).count()}
+@app.post("/api/photos/{photo_id}/cards")
+def add_card(photo_id: str, body: ManualCardInput, tasks: BackgroundTasks, db: Session=Depends(get_db), user: User=Depends(current_user)):
+    photo=visible_photo_query(db,user).filter_by(id=photo_id).first()
+    if not photo: raise HTTPException(404,"写真が見つかりません")
+    if not photo.storage_path: raise HTTPException(409,"撮影原本は削除済みです")
+    try: card = add_manual_card(photo, db, body.corners)
+    except ValueError as exc: raise HTTPException(400, str(exc)) from exc
+    async def job(): await process_card(card.id)
+    tasks.add_task(job)
+    return {"id":card.id,"status":card.status}
+@app.post("/api/photos/{photo_id}/complete-review")
+def complete_review(photo_id: str, body: CompleteReviewInput, db: Session=Depends(get_db), user: User=Depends(current_user)):
+    photo=visible_photo_query(db,user).filter_by(id=photo_id).first()
+    if not photo: raise HTTPException(404,"写真が見つかりません")
+    if not body.retain_photo and photo.storage_path:
+        source=Path(photo.storage_path); thumb=source.parent / "thumb.jpg"
+        source.unlink(missing_ok=True); thumb.unlink(missing_ok=True); photo.storage_path=""
+    db.commit(); return {"source_retained":bool(photo.storage_path)}
+@app.post("/api/photos/{photo_id}/confirm-cards")
+def confirm_cards(photo_id: str, body: BatchConfirmInput, db: Session=Depends(get_db), user: User=Depends(current_user)):
+    photo=visible_photo_query(db,user).filter_by(id=photo_id).first()
+    if not photo: raise HTTPException(404,"写真が見つかりません")
+    cards=db.query(BusinessCard).filter(BusinessCard.photo_id==photo_id, BusinessCard.id.in_(set(body.card_ids))).all()
+    if len(cards) != len(set(body.card_ids)): raise HTTPException(400,"選択した名刺が見つかりません")
+    for card in cards:
+        contact=db.query(Contact).filter_by(card_id=card.id).first()
+        if card.status not in {"review_required", "confirmed"} or not contact or contact.review_flags: raise HTTPException(400,"要確認項目が残っている名刺が含まれています")
+        contact.confirmed=True; card.status="confirmed"
+    db.commit(); return {"confirmed_count":len(cards)}
 @app.post("/api/photos/{photo_id}/process")
 def process(photo_id: str, tasks: BackgroundTasks, db: Session=Depends(get_db), user: User=Depends(current_user)):
     if not visible_photo_query(db,user).filter_by(id=photo_id).first(): raise HTTPException(404,"写真が見つかりません")
@@ -213,7 +247,7 @@ def cards(photo_id: str, db: Session=Depends(get_db), user: User=Depends(current
 @app.get("/api/cards/{card_id}")
 def card(card_id: str, db: Session=Depends(get_db), user: User=Depends(current_user)):
     c=card_for_user(card_id,db,user); contact=db.query(Contact).filter_by(card_id=c.id).first(); ocr=db.query(OCRResult).filter_by(card_id=c.id).order_by(OCRResult.created_at.desc()).first()
-    return {"id":c.id,"status":c.status,"image_url":f"/api/cards/{c.id}/image","contact":{k:getattr(contact,k) for k in Contact.__table__.columns.keys()} if contact else None,"ocr_text":ocr.raw_text if ocr else ""}
+    return {"id":c.id,"status":c.status,"image_url":f"/api/cards/{c.id}/image","contact":{k:getattr(contact,k) for k in Contact.__table__.columns.keys()} if contact else None,"ocr_text":ocr.raw_text if ocr else "","review_flags":contact.review_flags if contact else {}}
 @app.delete("/api/cards/{card_id}")
 def remove_card(card_id: str, db: Session=Depends(get_db), user: User=Depends(current_user)):
     card=card_for_user(card_id,db,user)
@@ -239,7 +273,9 @@ async def struct(card_id: str, db: Session=Depends(get_db), user: User=Depends(c
 @app.put("/api/cards/{card_id}/contact")
 def save_contact(card_id: str, body: ContactInput, db: Session=Depends(get_db), user: User=Depends(current_user)):
     c=card_for_user(card_id,db,user); contact=db.query(Contact).filter_by(card_id=c.id).first() or Contact(card_id=c.id)
-    for key,value in body.model_dump().items(): setattr(contact,key,value)
+    values=body.model_dump(); resolved=set(values.pop("resolved_fields", []))
+    for key,value in values.items(): setattr(contact,key,value)
+    contact.review_flags={key:value for key,value in (contact.review_flags or {}).items() if key not in resolved}
     db.add(contact); db.commit(); return contact
 @app.post("/api/cards/{card_id}/confirm")
 def confirm(card_id: str, db: Session=Depends(get_db), user: User=Depends(current_user)):

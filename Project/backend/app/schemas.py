@@ -22,4 +22,9 @@ class ContactInput(BaseModel):
     postal_code: str | None = None; address: str | None = None
     telephone: str | None = None; fax: str | None = None; mobile: str | None = None
     email: str | None = None; website: str | None = None; notes: str | None = None
+    resolved_fields: list[str] = []
 class ReprocessInput(BaseModel): ocr: bool = True; llm: bool = True
+class ManualCardInput(BaseModel):
+    corners: list[tuple[float, float]] = Field(min_length=4, max_length=4)
+class CompleteReviewInput(BaseModel): retain_photo: bool = False
+class BatchConfirmInput(BaseModel): card_ids: list[str] = Field(min_length=1)

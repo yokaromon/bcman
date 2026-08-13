@@ -49,6 +49,7 @@ export function CardReviewBody({ cardId, failed, confirmLabel, onConfirmed }: Pr
   // 離脱時に下書きを保存するため、クリーンアップから最新値を読めるようにしておく
   const draftRef = useRef<ContactInput | null>(null);
   const dirtyRef = useRef(false);
+  const editedFieldsRef = useRef<Set<ContactField>>(new Set());
 
   const load = useCallback(async () => {
     setErrorMessage('');
@@ -59,6 +60,7 @@ export function CardReviewBody({ cardId, failed, confirmLabel, onConfirmed }: Pr
       setValues(initial);
       draftRef.current = initial;
       dirtyRef.current = false;
+      editedFieldsRef.current = new Set();
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : '名刺を読み込めませんでした');
     }
@@ -77,7 +79,7 @@ export function CardReviewBody({ cardId, failed, confirmLabel, onConfirmed }: Pr
       if (!dirtyRef.current || !draft) {
         return;
       }
-      void saveContact(cardId, draft).catch(() => {
+      void saveContact(cardId, draft, [...editedFieldsRef.current]).catch(() => {
         // 離脱後なので画面に出す先がない。次に開いたとき元の値が見えるだけで実害はない
       });
     };
@@ -88,6 +90,7 @@ export function CardReviewBody({ cardId, failed, confirmLabel, onConfirmed }: Pr
       const next = { ...current, [field]: value };
       draftRef.current = next;
       dirtyRef.current = true;
+      editedFieldsRef.current.add(field);
       return next;
     });
   };
@@ -96,7 +99,7 @@ export function CardReviewBody({ cardId, failed, confirmLabel, onConfirmed }: Pr
     setBusy('登録しています…');
     setErrorMessage('');
     try {
-      await saveContact(cardId, values);
+      await saveContact(cardId, values, [...editedFieldsRef.current]);
       await confirmCard(cardId);
       dirtyRef.current = false;
       onConfirmed(cardId);
@@ -140,7 +143,7 @@ export function CardReviewBody({ cardId, failed, confirmLabel, onConfirmed }: Pr
 
       <div className="fields">
         {FIELDS.map((config) => (
-          <Field key={config.field} config={config} value={values[config.field]} onChange={updateField} />
+          <Field key={config.field} config={config} value={values[config.field]} flagged={Boolean(detail.review_flags[config.field])} onChange={updateField} />
         ))}
       </div>
 
@@ -165,16 +168,17 @@ export function CardReviewBody({ cardId, failed, confirmLabel, onConfirmed }: Pr
 type FieldProps = {
   config: FieldConfig;
   value: string;
+  flagged: boolean;
   onChange: (field: ContactField, value: string) => void;
 };
 
-function Field({ config, value, onChange }: FieldProps) {
+function Field({ config, value, flagged, onChange }: FieldProps) {
   const { field, label, kind = 'text' } = config;
 
   if (kind === 'multiline') {
     return (
       <label className="field">
-        <span className="field__label">{label}</span>
+        <span className="field__label">{label}{flagged && <em className="field__flag">要確認</em>}</span>
         <textarea
           className="field__input"
           value={value}
@@ -187,7 +191,7 @@ function Field({ config, value, onChange }: FieldProps) {
 
   return (
     <label className="field">
-      <span className="field__label">{label}</span>
+      <span className="field__label">{label}{flagged && <em className="field__flag">要確認</em>}</span>
       <input
         className="field__input"
         type={kind}

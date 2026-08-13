@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   fetchCards,
   fetchPhotos,
+  completeReview,
   isCardReady,
   reprocessCard,
   startProcessing,
@@ -12,6 +13,7 @@ import {
 import { CaptureScreen } from './components/CaptureScreen';
 import { ProcessingScreen } from './components/ProcessingScreen';
 import { CardPager } from './components/CardPager';
+import { CandidateList } from './components/CandidateList';
 
 const POLL_INTERVAL_MS = 2500;
 const POLL_TIMEOUT_MS = 10 * 60 * 1000;
@@ -35,6 +37,8 @@ export function CaptureFlow({ user }: { user: Me | null }) {
   const [failedCardIds, setFailedCardIds] = useState<Set<string>>(new Set());
   const [fatalMessage, setFatalMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
+  const [retainPhoto, setRetainPhoto] = useState(false);
+  const [showCandidates, setShowCandidates] = useState(false);
   // 複数グループに所属する利用者は、撮影のたびにどのグループへ登録するか選ぶ
   const [groupId, setGroupId] = useState(user?.groups[0]?.id ?? '');
 
@@ -56,6 +60,8 @@ export function CaptureFlow({ user }: { user: Me | null }) {
     setFailedCardIds(new Set());
     setFatalMessage('');
     setErrorMessage('');
+    setRetainPhoto(false);
+    setShowCandidates(false);
   }, []);
 
   const handlePick = async (file: File) => {
@@ -212,6 +218,18 @@ export function CaptureFlow({ user }: { user: Me | null }) {
       <div className="screen screen--center">
         <div className="hero__icon" aria-hidden="true">✅</div>
         <h2 className="hero__title">確認が終わりました</h2>
+        <label className="check-row">
+          <input type="checkbox" checked={retainPhoto} onChange={(event) => setRetainPhoto(event.target.checked)} />
+          撮影原本を保存する
+        </label>
+        <button
+          type="button"
+          className="button button--primary"
+          onClick={() => void completeReview(photoId, retainPhoto).catch((error: unknown) => setErrorMessage(describeError(error, '確認を完了できませんでした')))}
+        >
+          確認を完了
+        </button>
+        {errorMessage && <p className="alert alert--error">{errorMessage}</p>}
         <button type="button" className="button button--primary button--xl" onClick={restart}>
           続けて撮影
         </button>
@@ -221,6 +239,10 @@ export function CaptureFlow({ user }: { user: Me | null }) {
 
   if (fatalMessage || cards.length === 0) {
     return <ProcessingScreen fatalMessage={fatalMessage} onRestart={restart} />;
+  }
+
+  if (showCandidates) {
+    return <CandidateList photoId={photoId} cards={cards} onOpen={(next) => { setReviewIndex(next); setShowCandidates(false); }} onUpdated={() => { void fetchCards(photoId).then(setCards); }} onBack={() => setShowCandidates(false)} />;
   }
 
   // index を末尾で止めるのは、削除とポーリングの更新が前後したときに
@@ -235,6 +257,7 @@ export function CaptureFlow({ user }: { user: Me | null }) {
       onConfirmed={handleConfirmed}
       onDeleted={handleDeleted}
       onFinish={() => setPhase('done')}
+      onCandidates={() => setShowCandidates(true)}
     />
   );
 }

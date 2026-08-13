@@ -18,6 +18,7 @@ type Props = {
   onConfirmed: (cardId: string) => void;
   onDeleted?: (cardId: string) => void;
   onFinish?: () => void;
+  onCandidates?: () => void;
 };
 
 export function CardPager({
@@ -29,6 +30,7 @@ export function CardPager({
   onConfirmed,
   onDeleted,
   onFinish,
+  onCandidates,
 }: Props) {
   const touchStart = useRef<{ x: number; y: number } | null>(null);
   const [errorMessage, setErrorMessage] = useState('');
@@ -159,9 +161,10 @@ export function CardPager({
       )}
 
       {onFinish && (
-        <button type="button" className="button button--ghost" onClick={onFinish}>
-          終了
-        </button>
+        <div className="action-bar">
+          {onCandidates && <button type="button" className="button button--ghost" onClick={onCandidates}>候補一覧・一括登録</button>}
+          <button type="button" className="button button--ghost" onClick={onFinish}>確認を完了</button>
+        </div>
       )}
     </div>
   );
