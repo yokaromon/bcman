@@ -1,4 +1,4 @@
-import asyncio, base64, json, re, shutil
+import asyncio, base64, json, re, shutil, subprocess, tempfile
 from io import BytesIO
 from pathlib import Path
 import cv2
@@ -288,11 +288,46 @@ async def _read_rotated(card: BusinessCard, rotation: int):
     text, response = await chat([{"role":"user","content":[{"type":"text","text":OCR_PROMPT},{"type":"image_url","image_url":{"url":f"data:image/jpeg;base64,{encoded}"}}]}])
     return {"rotation": rotation, "path": target, "text": text, "response": response, "score": ocr_text_score(text)}
 
+def osd_orientation(path: Path) -> tuple[int | None, float]:
+    """Tesseract内蔵OSD(--psm 0)で必要な回転角を1回のローカル処理で推定する。
+    バイナリが無い・OSDが向きを決めきれない画像では (None, 0.0) を返し、呼び出し側にAI探索へ委ねさせる。"""
+    with tempfile.TemporaryDirectory() as tmp:
+        out_base = Path(tmp) / "osd"
+        try:
+            subprocess.run([settings.tesseract_cmd, str(path), str(out_base), "--psm", "0"], capture_output=True, timeout=30, check=False)
+        except (OSError, subprocess.TimeoutExpired):
+            return None, 0.0
+        result = out_base.with_suffix(".osd")
+        if not result.exists(): return None, 0.0
+        output = result.read_text(encoding="utf-8", errors="ignore")
+    rotate_match = re.search(r"Rotate:\s*(\d+)", output)
+    if not rotate_match: return None, 0.0
+    conf_match = re.search(r"Orientation confidence:\s*([\d.]+)", output)
+    return int(rotate_match.group(1)) % 360, float(conf_match.group(1)) if conf_match else 0.0
+
+async def _finish_recognition(card: BusinessCard, db: Session, rotation: int, target: Path, orientation_history: ProcessingHistory):
+    """確定した向きで1回だけOCRし、結果を保存する。"""
+    encoded = encode_for_ocr(target)
+    text, response = await chat([{"role":"user","content":[{"type":"text","text":OCR_PROMPT},{"type":"image_url","image_url":{"url":f"data:image/jpeg;base64,{encoded}"}}]}])
+    card.oriented_image_path, card.orientation = str(target), rotation
+    db.add(OCRResult(card_id=card.id, engine="ykr-multimodal", engine_version=settings.ai_model, raw_text=text, raw_json=response))
+    db.add(orientation_history)
+    db.add(ProcessingHistory(card_id=card.id, process_type="ocr", engine="ykr-multimodal", version=settings.ai_model, input_json={"prompt":OCR_PROMPT,"orientation":rotation}, output_json={"raw_text":text}))
+    card.status = "ocr_completed"; db.commit()
+
 async def recognize_card(card: BusinessCard, db: Session):
-    """向きを変えながらOCRし、名刺として最も成立した結果を採用する。
-    十分な得点が出た時点で打ち切るので、素直な名刺は1回のOCRで決着する。"""
+    """向きはまずローカルのTesseract OSDで即断する(ADR 0012)。確信が持てないカードだけ、
+    向きを変えながらOCRして名刺として最も成立した結果を採用するAI探索(ADR 0011)にフォールバックする。"""
     card.status = "ocr_processing"; db.commit()
-    with Image.open(Path(card.corrected_image_path)) as image: width, height = image.size
+    source = Path(card.corrected_image_path)
+    osd_rotation, osd_confidence = osd_orientation(source)
+    if osd_rotation is not None and osd_confidence >= settings.orientation_osd_confidence_min:
+        target = source.parent / f"oriented-{osd_rotation}.jpg"
+        _rotated_image(source, osd_rotation, target)
+        history = ProcessingHistory(card_id=card.id, process_type="orientation", engine="tesseract-osd", version="", input_json={"confidence_min":settings.orientation_osd_confidence_min}, output_json={"rotation":osd_rotation,"confidence":osd_confidence,"image_path":str(target)})
+        await _finish_recognition(card, db, osd_rotation, target, history)
+        return
+    with Image.open(source) as image: width, height = image.size
     order = orientation_order(width, height)
     attempts, best = [], None
     for rotation in order:
@@ -302,7 +337,7 @@ async def recognize_card(card: BusinessCard, db: Session):
         if attempt["score"] >= ORIENTATION_ACCEPT_SIGNALS: break
     card.oriented_image_path, card.orientation = str(best["path"]), best["rotation"]
     db.add(OCRResult(card_id=card.id, engine="ykr-multimodal", engine_version=settings.ai_model, raw_text=best["text"], raw_json=best["response"]))
-    db.add(ProcessingHistory(card_id=card.id, process_type="orientation", engine="ykr-multimodal", version=settings.ai_model, input_json={"order":order,"accept_signals":ORIENTATION_ACCEPT_SIGNALS}, output_json={"attempts":attempts,"chosen":best["rotation"],"image_path":str(best["path"])}))
+    db.add(ProcessingHistory(card_id=card.id, process_type="orientation", engine="ykr-multimodal", version=settings.ai_model, input_json={"order":order,"accept_signals":ORIENTATION_ACCEPT_SIGNALS,"osd_rotation":osd_rotation,"osd_confidence":osd_confidence}, output_json={"attempts":attempts,"chosen":best["rotation"],"image_path":str(best["path"])}))
     db.add(ProcessingHistory(card_id=card.id, process_type="ocr", engine="ykr-multimodal", version=settings.ai_model, input_json={"prompt":OCR_PROMPT,"orientation":best["rotation"]}, output_json={"raw_text":best["text"]}))
     card.status = "ocr_completed"; db.commit()
 
