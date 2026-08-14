@@ -95,6 +95,12 @@ export function CardPager({
 
   return (
     <div className="screen screen--form">
+      {/* 入力欄でのカーソル移動と競合しないよう、スワイプは画像の上だけで拾う */}
+      <div className="card-image" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
+        <img className={previewRotation ? 'card-image__rotated' : ''} style={{ transform: `rotate(${previewRotation}deg)` }} src={cardImageUrl(card.id)} alt={`名刺 ${index + 1} の画像`} />
+        {total > 1 && <span className="card-image__hint">← 画像を左右にスワイプで切り替え →</span>}
+      </div>
+
       <div className="pager">
         <button
           type="button"
@@ -129,12 +135,6 @@ export function CardPager({
         >
           ›
         </button>
-      </div>
-
-      {/* 入力欄でのカーソル移動と競合しないよう、スワイプは画像の上だけで拾う */}
-      <div className="card-image" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
-        <img className={previewRotation ? 'card-image__rotated' : ''} style={{ transform: `rotate(${previewRotation}deg)` }} src={cardImageUrl(card.id)} alt={`名刺 ${index + 1} の画像`} />
-        {total > 1 && <span className="card-image__hint">← 画像を左右にスワイプで切り替え →</span>}
       </div>
 
       {showForm ? (

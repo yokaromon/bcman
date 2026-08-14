@@ -476,7 +476,10 @@ body {
 }
 
 .card-image {
-  position: relative;
+  /* 編集中も名刺を見ながら入力できるよう、スクロールしても画面上部に固定する */
+  position: sticky;
+  top: 0;
+  z-index: 5;
   display: block;
   border-radius: 12px;
   overflow: hidden;
