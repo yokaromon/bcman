@@ -1,3 +1,4 @@
+from datetime import date
 from pydantic import BaseModel, Field
 
 CONTACT_FIELDS = ("company_name", "company_name_kana", "department", "position", "person_name", "person_name_kana", "postal_code", "address", "telephone", "fax", "mobile", "email", "website", "notes")
@@ -29,3 +30,6 @@ class ManualCardInput(BaseModel):
 class CompleteReviewInput(BaseModel): retain_photo: bool = False
 class BatchConfirmInput(BaseModel): card_ids: list[str] = Field(min_length=1)
 class OrientationInput(BaseModel): rotation: int = Field(ge=0, le=270, multiple_of=90)
+class CardRegistrationInput(BaseModel):
+    card_owner_user_id: str
+    exchanged_at: date

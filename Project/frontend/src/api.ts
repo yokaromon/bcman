@@ -93,7 +93,11 @@ export type Contact = Partial<Record<ContactField, string | null>> & {
   id?: string;
   card_id?: string;
   confirmed?: boolean;
+  card_owner_user_id?: string | null;
+  exchanged_at?: string | null;
 };
+
+export type OrgMember = { id: string; name: string };
 
 export type CardDetail = {
   id: string;
@@ -203,6 +207,10 @@ export function fetchUserDevices(orgId: string, userId: string): Promise<Trusted
 export function revokeDevice(orgId: string, deviceId: string): Promise<{ revoked: boolean }> {
   return request(`/organizations/${orgId}/devices/${deviceId}`, { method: 'DELETE' });
 }
+/** Card Owner（登録者）選択肢用。自分のOrganizationのUserを、管理者以外でも取得できる。 */
+export function fetchMembers(): Promise<OrgMember[]> {
+  return request<OrgMember[]>('/members');
+}
 
 // --- 名刺 ---
 
@@ -238,6 +246,14 @@ export function saveContact(cardId: string, contact: ContactInput, resolvedField
 
 export function confirmCard(cardId: string): Promise<{ status: string }> {
   return request<{ status: string }>(`/cards/${cardId}/confirm`, { method: 'POST' });
+}
+
+/** 登録者(Card Owner)・名刺交換日(Exchanged At)の修正。確認(confirm)済みの名刺にのみ使える。 */
+export function updateCardRegistration(
+  cardId: string,
+  body: { card_owner_user_id: string; exchanged_at: string },
+): Promise<{ card_owner_user_id: string; exchanged_at: string }> {
+  return request(`/cards/${cardId}/registration`, jsonInit('PUT', body));
 }
 
 export function reprocessCard(cardId: string): Promise<{ status: CardStatus }> {
@@ -301,4 +317,84 @@ const CARD_STATUS_LABELS: Record<CardStatus, string> = {
 
 export function cardStatusLabel(status: CardStatus): string {
   return CARD_STATUS_LABELS[status] ?? status;
+}
+
+// --- 名鑑（Person/Company/接点履歴） ---
+
+export type TouchHistoryEntry = {
+  contact_id: string;
+  person_name: string | null;
+  company_name: string | null;
+  department: string | null;
+  position: string | null;
+  exchanged_at: string | null;
+  card_owner: { id: string; name: string | null } | null;
+};
+
+export type PersonSummary = {
+  id: string;
+  display_name: string | null;
+  display_company: string | null;
+  contact_count: number;
+  latest_exchanged_at: string | null;
+};
+
+export type PersonDetail = {
+  id: string;
+  display_name: string | null;
+  display_company: string | null;
+  touch_history: TouchHistoryEntry[];
+};
+
+export type CompanySummary = {
+  id: string;
+  display_name: string | null;
+  person_count: number;
+  latest_exchanged_at: string | null;
+};
+
+export type CompanyDetail = {
+  id: string;
+  display_name: string | null;
+  touch_history: TouchHistoryEntry[];
+};
+
+export type MergeCandidate = {
+  id: string;
+  kind: 'person' | 'company';
+  signal: string;
+  signal_label: string;
+  contact_id: string;
+  contact_person_name: string | null;
+  contact_company_name: string | null;
+  target_id: string;
+  target_display_name: string | null;
+};
+
+export function fetchPersons(): Promise<PersonSummary[]> {
+  return request<PersonSummary[]>('/directory/persons');
+}
+export function fetchPerson(personId: string): Promise<PersonDetail> {
+  return request<PersonDetail>(`/directory/persons/${personId}`);
+}
+export function splitPersonContact(personId: string, contactId: string): Promise<{ new_person_id: string }> {
+  return request(`/directory/persons/${personId}/contacts/${contactId}/split`, { method: 'POST' });
+}
+export function fetchCompanies(): Promise<CompanySummary[]> {
+  return request<CompanySummary[]>('/directory/companies');
+}
+export function fetchCompany(companyId: string): Promise<CompanyDetail> {
+  return request<CompanyDetail>(`/directory/companies/${companyId}`);
+}
+export function splitCompanyContact(companyId: string, contactId: string): Promise<{ new_company_id: string }> {
+  return request(`/directory/companies/${companyId}/contacts/${contactId}/split`, { method: 'POST' });
+}
+export function fetchMergeCandidates(): Promise<MergeCandidate[]> {
+  return request<MergeCandidate[]>('/directory/merge-candidates');
+}
+export function acceptMergeCandidate(candidateId: string): Promise<{ status: string }> {
+  return request(`/directory/merge-candidates/${candidateId}/accept`, { method: 'POST' });
+}
+export function dismissMergeCandidate(candidateId: string): Promise<{ status: string }> {
+  return request(`/directory/merge-candidates/${candidateId}/dismiss`, { method: 'POST' });
 }

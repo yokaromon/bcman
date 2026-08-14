@@ -2,13 +2,16 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   confirmCard,
   fetchCard,
+  fetchMembers,
   reprocessCard,
   saveContact,
   setCardOrientation,
   toContactInput,
+  updateCardRegistration,
   type CardDetail,
   type ContactField,
   type ContactInput,
+  type OrgMember,
 } from '../api';
 
 type FieldConfig = {
@@ -48,6 +51,16 @@ export function CardReviewBody({ cardId, failed, confirmLabel, onConfirmed, onPr
   const [busy, setBusy] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [previewRotation, setPreviewRotation] = useState(0);
+  const [members, setMembers] = useState<OrgMember[]>([]);
+  const [registrationError, setRegistrationError] = useState('');
+
+  useEffect(() => {
+    fetchMembers()
+      .then(setMembers)
+      .catch(() => {
+        // 登録者の選択肢が出せないだけで、確認・登録自体は続けられる
+      });
+  }, []);
 
   // 離脱時に下書きを保存するため、クリーンアップから最新値を読めるようにしておく
   const draftRef = useRef<ContactInput | null>(null);
@@ -127,6 +140,22 @@ export function CardReviewBody({ cardId, failed, confirmLabel, onConfirmed, onPr
     }
   };
 
+  const updateRegistration = async (field: 'card_owner_user_id' | 'exchanged_at', value: string) => {
+    if (!detail?.contact?.card_owner_user_id || !detail.contact.exchanged_at) return;
+    const body = {
+      card_owner_user_id: detail.contact.card_owner_user_id,
+      exchanged_at: detail.contact.exchanged_at,
+      [field]: value,
+    };
+    setRegistrationError('');
+    try {
+      const result = await updateCardRegistration(cardId, body);
+      setDetail((current) => (current ? { ...current, contact: { ...current.contact, ...result } } : current));
+    } catch (error) {
+      setRegistrationError(error instanceof Error ? error.message : '登録者・交換日の更新に失敗しました');
+    }
+  };
+
   const rotatePreview = () => {
     const next = (previewRotation + 90) % 360;
     setPreviewRotation(next); onPreviewRotation(next);
@@ -183,6 +212,35 @@ export function CardReviewBody({ cardId, failed, confirmLabel, onConfirmed, onPr
           {busy || confirmLabel}
         </button>
       </div>
+
+      {detail.contact?.confirmed && detail.contact.card_owner_user_id && detail.contact.exchanged_at && (
+        <div className="fields">
+          {registrationError && <p className="alert alert--error">{registrationError}</p>}
+          <label className="field">
+            <span className="field__label">登録者</span>
+            <select
+              className="field__input"
+              value={detail.contact.card_owner_user_id}
+              onChange={(event) => void updateRegistration('card_owner_user_id', event.target.value)}
+            >
+              {members.map((member) => (
+                <option key={member.id} value={member.id}>
+                  {member.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="field">
+            <span className="field__label">名刺交換日</span>
+            <input
+              className="field__input"
+              type="date"
+              value={detail.contact.exchanged_at}
+              onChange={(event) => void updateRegistration('exchanged_at', event.target.value)}
+            />
+          </label>
+        </div>
+      )}
     </div>
   );
 }

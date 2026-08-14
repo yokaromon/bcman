@@ -59,3 +59,11 @@ _Avoid_: Batch completion, processing percentage
 **Batch Registration**:
 The explicit confirmation that registers only the user-selected Contact candidates from one Photo whose Review Flags are resolved. Candidates are selected from a thumbnail-and-status list; it never deduplicates or merges candidates automatically.
 _Avoid_: Auto-registration, automatic deduplication
+
+**Card Owner**:
+The User who exchanged a Business Card in person and owns the resulting relationship, distinct from whoever operated the scanning. Defaults to the User performing Batch Registration but can be reassigned per Contact, to cover proxy scanning (e.g. an assistant registering cards on a salesperson's behalf).
+_Avoid_: Registrant, uploader, owner
+
+**Exchanged At**:
+The date a Business Card was actually exchanged in person, as distinct from when its Photo was uploaded. Defaults to the Photo's upload date at Batch Registration time but can be corrected by the Card Owner, to cover batch-scanning a stack of cards well after the events they came from.
+_Avoid_: Registered at, created at, meeting date

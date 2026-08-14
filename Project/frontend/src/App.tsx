@@ -2,11 +2,12 @@ import { useEffect, useState } from 'react';
 import { fetchMe, logout, type Me } from './api';
 import { CaptureFlow } from './CaptureFlow';
 import { AdminScreen } from './components/AdminScreen';
+import { DirectoryScreen } from './components/directory/DirectoryScreen';
 import { HistoryScreen } from './components/HistoryScreen';
 import { InstallAppButton } from './components/InstallAppButton';
 import { LoginScreen } from './components/LoginScreen';
 
-type Tab = 'capture' | 'history' | 'admin';
+type Tab = 'capture' | 'history' | 'directory' | 'admin';
 
 export function App() {
   const [me, setMe] = useState<Me | null>(null);
@@ -74,6 +75,7 @@ export function App() {
       <main className="app__main">
         {tab === 'capture' && <CaptureFlow key={openCount} user={me} />}
         {tab === 'history' && <HistoryScreen key={openCount} user={me} />}
+        {tab === 'directory' && <DirectoryScreen key={openCount} user={me} />}
         {tab === 'admin' && me.role === 'admin' && <AdminScreen key={openCount} user={me} />}
       </main>
 
@@ -93,6 +95,14 @@ export function App() {
         >
           <span aria-hidden="true">🗂</span>
           履歴
+        </button>
+        <button
+          type="button"
+          className={tab === 'directory' ? 'tabbar__item tabbar__item--active' : 'tabbar__item'}
+          onClick={() => openTab('directory')}
+        >
+          <span aria-hidden="true">📇</span>
+          名鑑
         </button>
         {me.role === 'admin' && (
           <button

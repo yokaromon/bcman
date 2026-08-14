@@ -7,9 +7,11 @@ from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 from . import auth
 from .database import Base, SessionLocal, engine, get_db
+from .directory import models as directory_models, service as directory_service
+from .directory.routes import router as directory_router
 from .models import AuditLog, BusinessCard, Contact, Group, OCRResult, Organization, Photo, TrustedDevice, User, UserGroup
-from .schemas import BatchConfirmInput, CompleteReviewInput, ContactInput, GroupInput, LoginInput, ManualCardInput, OrientationInput, OrganizationInput, PasswordResetInput, ReprocessInput, TotpInput, UserInput
-from .services import add_manual_card, apply_orientation, card_thumbnail, delete_card, delete_photo, image_size, photo_thumbnail, process_card, process_photo, recognize_card, run_ocr, structure
+from .schemas import BatchConfirmInput, CardRegistrationInput, CompleteReviewInput, ContactInput, GroupInput, LoginInput, ManualCardInput, OrientationInput, OrganizationInput, PasswordResetInput, ReprocessInput, TotpInput, UserInput
+from .services import add_manual_card, apply_orientation, card_thumbnail, delete_card, delete_photo, image_size, photo_thumbnail, process_card, process_photo, recognize_card, run_ocr, structure, user_group_ids, visible_photo_query
 from .settings import settings
 
 # サムネイルは中身が変わらず、変われば元の名刺ごと別IDになる。
@@ -18,10 +20,13 @@ THUMBNAIL_CACHE_CONTROL = "private, max-age=604800"
 
 app = FastAPI(title="BCMan API", root_path=settings.root_path)
 app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173"], allow_methods=["*"], allow_headers=["*"], allow_credentials=True)
+app.include_router(directory_router)
 
 def bootstrap():
     """Organization・初期管理者の作成はアプリ外（scripts/create_org.py）で行う。
-    ここではテーブル作成のみ。"""
+    ここではテーブル作成のみ。directory_models の import は使わないが、Base.metadata に
+    Person/Company等を登録させるために必要（create_all は import 済みのモデルしか作らない）。"""
+    _ = directory_models
     Base.metadata.create_all(engine); settings.storage_dir.mkdir(parents=True, exist_ok=True)
     if engine.dialect.name == "sqlite":
         with engine.begin() as connection:
@@ -36,13 +41,6 @@ def startup(): bootstrap()
 current_user = auth.current_user
 require_admin = auth.require_admin
 
-def user_group_ids(db: Session, user: User) -> list[str]:
-    return [row.group_id for row in db.query(UserGroup).filter_by(user_id=user.id)]
-def visible_photo_query(db: Session, user: User):
-    query = db.query(Photo).filter(Photo.organization_id == user.organization_id)
-    org = db.get(Organization, user.organization_id)
-    if user.role == "admin" or org.sharing_mode == "shared": return query
-    return query.filter(Photo.group_id.in_(user_group_ids(db, user)))
 def card_for_user(card_id, db, user):
     card = db.get(BusinessCard, card_id)
     if not card or not visible_photo_query(db, user).filter(Photo.id == card.photo_id).first(): raise HTTPException(404, "名刺が見つかりません")
@@ -117,6 +115,10 @@ def list_groups(org_id: str, db: Session=Depends(get_db), user: User=Depends(req
 def create_group(org_id: str, body: GroupInput, db: Session=Depends(get_db), user: User=Depends(require_admin)):
     if user.organization_id != org_id: raise HTTPException(403, "権限がありません")
     item=Group(organization_id=org_id, **body.model_dump()); db.add(item); db.commit(); return item
+@app.get("/api/members")
+def list_members(db: Session=Depends(get_db), user: User=Depends(current_user)):
+    """Card Owner（登録者）選択肢用。list_users と違い管理者限定にせず、自分のOrganizationのid/nameのみ返す。"""
+    return [{"id":u.id,"name":u.name} for u in db.query(User).filter_by(organization_id=user.organization_id).order_by(User.name)]
 @app.get("/api/organizations/{org_id}/users")
 def list_users(org_id: str, db: Session=Depends(get_db), user: User=Depends(require_admin)):
     if user.organization_id != org_id: raise HTTPException(403, "権限がありません")
@@ -231,6 +233,8 @@ def confirm_cards(photo_id: str, body: BatchConfirmInput, db: Session=Depends(ge
         contact=db.query(Contact).filter_by(card_id=card.id).first()
         if card.status not in {"review_required", "confirmed"} or not contact or contact.review_flags: raise HTTPException(400,"要確認項目が残っている名刺が含まれています")
         contact.confirmed=True; card.status="confirmed"
+        contact.card_owner_user_id, contact.exchanged_at = user.id, photo.created_at.date()
+        db.flush(); directory_service.register_confirmed_contact(contact.id, user, db)
     db.commit(); return {"confirmed_count":len(cards)}
 @app.post("/api/photos/{photo_id}/process")
 def process(photo_id: str, tasks: BackgroundTasks, db: Session=Depends(get_db), user: User=Depends(current_user)):
@@ -280,7 +284,19 @@ def save_contact(card_id: str, body: ContactInput, db: Session=Depends(get_db), 
 def confirm(card_id: str, db: Session=Depends(get_db), user: User=Depends(current_user)):
     c=card_for_user(card_id,db,user); contact=db.query(Contact).filter_by(card_id=c.id).first()
     if not contact: raise HTTPException(400,"連絡先情報がありません")
-    contact.confirmed=True; c.status="confirmed"; db.commit(); return {"status":"confirmed"}
+    photo=db.get(Photo,c.photo_id)
+    contact.confirmed=True; c.status="confirmed"
+    contact.card_owner_user_id, contact.exchanged_at = user.id, photo.created_at.date()
+    db.flush(); directory_service.register_confirmed_contact(contact.id, user, db)
+    db.commit(); return {"status":"confirmed"}
+@app.put("/api/cards/{card_id}/registration")
+def update_registration(card_id: str, body: CardRegistrationInput, db: Session=Depends(get_db), user: User=Depends(current_user)):
+    c=card_for_user(card_id,db,user); contact=db.query(Contact).filter_by(card_id=c.id).first()
+    if not contact or not contact.confirmed: raise HTTPException(400,"まだ登録されていません")
+    owner=db.get(User, body.card_owner_user_id)
+    if not owner or owner.organization_id != user.organization_id: raise HTTPException(400,"登録者を正しく選択してください")
+    contact.card_owner_user_id, contact.exchanged_at = body.card_owner_user_id, body.exchanged_at
+    db.commit(); return {"card_owner_user_id":contact.card_owner_user_id,"exchanged_at":contact.exchanged_at}
 @app.post("/api/cards/{card_id}/reprocess")
 async def reprocess(card_id: str, body: ReprocessInput, db: Session=Depends(get_db), user: User=Depends(current_user)):
     c=card_for_user(card_id,db,user)

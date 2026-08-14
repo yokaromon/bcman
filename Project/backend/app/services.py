@@ -6,7 +6,7 @@ import httpx
 import numpy as np
 from PIL import Image, ImageOps
 from sqlalchemy.orm import Session
-from .models import BusinessCard, Contact, OCRResult, Photo, ProcessingHistory
+from .models import BusinessCard, Contact, Organization, OCRResult, Photo, ProcessingHistory, User, UserGroup
 from .schemas import CONTACT_FIELDS
 from .settings import settings
 
@@ -367,3 +367,14 @@ async def process_photo(photo_id: str, db: Session):
         photo.status = "completed"; db.commit()
     except Exception as exc:
         photo.status = "failed"; db.commit(); raise exc
+
+# --- 可視範囲（Organization/Group/Sharing Mode）。directory.service からも使う ---
+
+def user_group_ids(db: Session, user: User) -> list[str]:
+    return [row.group_id for row in db.query(UserGroup).filter_by(user_id=user.id)]
+
+def visible_photo_query(db: Session, user: User):
+    query = db.query(Photo).filter(Photo.organization_id == user.organization_id)
+    org = db.get(Organization, user.organization_id)
+    if user.role == "admin" or org.sharing_mode == "shared": return query
+    return query.filter(Photo.group_id.in_(user_group_ids(db, user)))

@@ -1,6 +1,6 @@
 import uuid
-from datetime import datetime
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, JSON, String, Text
+from datetime import date, datetime
+from sqlalchemy import Boolean, Date, DateTime, Float, ForeignKey, Integer, JSON, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 from .database import Base
 
@@ -131,6 +131,10 @@ class Contact(Base):
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     review_flags: Mapped[dict] = mapped_column(JSON, default=dict)
     confirmed: Mapped[bool] = mapped_column(Boolean, default=False)
+    # 登録者(Card Owner)・名刺交換日(Exchanged At)。confirm()/confirm_cards()で確定時に既定値が入る。
+    # docs/CONTEXT.md 参照
+    card_owner_user_id: Mapped[str | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    exchanged_at: Mapped[date | None] = mapped_column(Date, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now)
 
