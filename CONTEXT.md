@@ -41,8 +41,8 @@ The process that identifies Business Card candidates and their four corners in a
 _Avoid_: OCR, rectangular cropping
 
 **Reading Orientation**:
-The rotation of 0, 90, 180, or 270 degrees that presents the printed content of a perspective-corrected Business Card upright for recognition. It is not asked of the image AI but derived from recognition itself: each right-angle rotation is read in turn and scored by how many business-card elements the reading contains, and the first reading to reach the acceptance threshold settles the orientation. When no rotation reaches it, the highest-scoring one is used. The user can correct the orientation in 90-degree steps, previewing before it is committed and re-recognised; a user-supplied orientation is read as given rather than searched. The orientation-corrected image is retained separately from the perspective-corrected image.
-_Avoid_: Card angle, image rotation
+The rotation of 0, 90, 180, or 270 degrees that presents the printed content of a perspective-corrected Business Card upright for recognition. It defaults to 0 degrees, i.e. however the card was photographed, and is never guessed automatically. The user can correct it in 90-degree steps, previewing before it is committed and re-recognised; a corrected orientation is read as given, never re-derived. The orientation-corrected image is retained separately from the perspective-corrected image.
+_Avoid_: Card angle, image rotation, automatic orientation detection
 
 **Retry Required**:
 The state of a detected Business Card whose OCR or structuring attempt still fails after one automatic retry. It remains a review candidate and can be retried independently without interrupting other cards.

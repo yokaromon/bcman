@@ -1,4 +1,4 @@
-import asyncio, base64, json, re, shutil, subprocess, tempfile
+import asyncio, base64, json, re, shutil
 from io import BytesIO
 from pathlib import Path
 import cv2
@@ -15,24 +15,6 @@ STRUCTURE_PROMPT = """次のOCR原文から名刺情報をJSONだけで抽出し
 
 OCR_MAX_EDGE = 1600
 OCR_JPEG_QUALITY = 85
-
-# 名刺に繰り返し現れる要素。向きを間違えたOCRはこれらを揃えられないので、
-# 「何種類そろったか」がそのまま向きの正しさの目安になる。
-CARD_TEXT_SIGNALS = (
-    r"〒\s*[\d０-９]{3}\s*[-‐－ー]?\s*[\d０-９]{4}",
-    r"(?:TEL|Tel|ＴＥＬ|電話)[^\d０-９]{0,4}[\d０-９][\d０-９\-‐－()（） ]{7,}",
-    r"(?:FAX|Fax|ＦＡＸ)[^\d０-９]{0,4}[\d０-９][\d０-９\-‐－()（） ]{7,}",
-    r"[\w.+-]+@[\w-]+\.[\w.-]*\w",
-    r"(?:https?://|www\.)[\w./%-]+",
-    r"(?:株式会社|有限会社|合同会社|Co\.,?\s*Ltd|Inc\.|Corporation)",
-    r"(?:北海道|東京都|大阪府|京都府|[^\W\d_]{2,3}県)",
-)
-# 3種そろえば採用して打ち切る。一般的な名刺は正しい向きなら5〜7種そろうので、
-# ここで止まらないのは情報量の少ない名刺だけになる。
-ORIENTATION_ACCEPT_SIGNALS = 3
-# 向きが違うとモデルは短い断片か「読めない」旨の文を返す。どちらも0点にする。
-OCR_MIN_LENGTH = 10
-OCR_REFUSAL_MARKERS = ("読み取れ", "判読", "不鮮明", "認識できま", "cannot", "can't", "unable", "sorry")
 
 # 名刺の実寸 91×55mm は比 1.65。斜めから撮ったときの透視短縮でずれる分だけ幅を持たせる。
 CARD_ASPECT_MIN, CARD_ASPECT_MAX = 1.35, 2.10
@@ -278,83 +260,6 @@ def _rotated_image(source: Path, rotation: int, target: Path):
     if rotation: image = cv2.rotate(image, transforms[rotation])
     cv2.imwrite(str(target), image)
 
-def ocr_text_score(text: str) -> int:
-    """OCR結果が名刺として成立している度合いを、名刺特有の要素の種類数で返す。
-    向きの判定にモデルへ角度を尋ねないのは、8BクラスのVLMは「何度回すか」という幾何推論より
-    読字のほうが確度が高く、読めた結果そのものが向きの答えになるため。"""
-    body = (text or "").strip()
-    if len(body) < OCR_MIN_LENGTH: return 0
-    lowered = body.lower()
-    if any(marker in lowered for marker in OCR_REFUSAL_MARKERS): return 0
-    return sum(1 for pattern in CARD_TEXT_SIGNALS if re.search(pattern, body))
-
-def orientation_order(width: int, height: int) -> list[int]:
-    """試す向きの優先順を返す。日本の名刺は横型が大半なので、切り抜きが縦長のときは
-    「縦型名刺が正立している」より「横型名刺を横倒しで撮った」を先に疑う。"""
-    return [0, 180, 90, 270] if width >= height else [90, 270, 0, 180]
-
-async def _read_rotated(card: BusinessCard, rotation: int):
-    """指定した向きに回した派生画像を作り、それをOCRした結果と得点を返す。"""
-    source = Path(card.corrected_image_path)
-    target = source.parent / f"oriented-{rotation}.jpg"
-    _rotated_image(source, rotation, target)
-    encoded = encode_for_ocr(target)
-    text, response = await chat([{"role":"user","content":[{"type":"text","text":OCR_PROMPT},{"type":"image_url","image_url":{"url":f"data:image/jpeg;base64,{encoded}"}}]}])
-    return {"rotation": rotation, "path": target, "text": text, "response": response, "score": ocr_text_score(text)}
-
-def osd_orientation(path: Path) -> tuple[int | None, float]:
-    """Tesseract内蔵OSD(--psm 0)で必要な回転角を1回のローカル処理で推定する。
-    バイナリが無い・OSDが向きを決めきれない画像では (None, 0.0) を返し、呼び出し側にAI探索へ委ねさせる。"""
-    with tempfile.TemporaryDirectory() as tmp:
-        out_base = Path(tmp) / "osd"
-        try:
-            subprocess.run([settings.tesseract_cmd, str(path), str(out_base), "--psm", "0"], capture_output=True, timeout=30, check=False)
-        except (OSError, subprocess.TimeoutExpired):
-            return None, 0.0
-        result = out_base.with_suffix(".osd")
-        if not result.exists(): return None, 0.0
-        output = result.read_text(encoding="utf-8", errors="ignore")
-    rotate_match = re.search(r"Rotate:\s*(\d+)", output)
-    if not rotate_match: return None, 0.0
-    conf_match = re.search(r"Orientation confidence:\s*([\d.]+)", output)
-    return int(rotate_match.group(1)) % 360, float(conf_match.group(1)) if conf_match else 0.0
-
-async def _finish_recognition(card: BusinessCard, db: Session, rotation: int, target: Path, orientation_history: ProcessingHistory):
-    """確定した向きで1回だけOCRし、結果を保存する。"""
-    encoded = encode_for_ocr(target)
-    text, response = await chat([{"role":"user","content":[{"type":"text","text":OCR_PROMPT},{"type":"image_url","image_url":{"url":f"data:image/jpeg;base64,{encoded}"}}]}])
-    card.oriented_image_path, card.orientation = str(target), rotation
-    db.add(OCRResult(card_id=card.id, engine="ykr-multimodal", engine_version=settings.ai_model, raw_text=text, raw_json=response))
-    db.add(orientation_history)
-    db.add(ProcessingHistory(card_id=card.id, process_type="ocr", engine="ykr-multimodal", version=settings.ai_model, input_json={"prompt":OCR_PROMPT,"orientation":rotation}, output_json={"raw_text":text}))
-    card.status = "ocr_completed"; db.commit()
-
-async def recognize_card(card: BusinessCard, db: Session):
-    """向きはまずローカルのTesseract OSDで即断する(ADR 0012)。確信が持てないカードだけ、
-    向きを変えながらOCRして名刺として最も成立した結果を採用するAI探索(ADR 0011)にフォールバックする。"""
-    card.status = "ocr_processing"; db.commit()
-    source = Path(card.corrected_image_path)
-    osd_rotation, osd_confidence = osd_orientation(source)
-    if osd_rotation is not None and osd_confidence >= settings.orientation_osd_confidence_min:
-        target = source.parent / f"oriented-{osd_rotation}.jpg"
-        _rotated_image(source, osd_rotation, target)
-        history = ProcessingHistory(card_id=card.id, process_type="orientation", engine="tesseract-osd", version="", input_json={"confidence_min":settings.orientation_osd_confidence_min}, output_json={"rotation":osd_rotation,"confidence":osd_confidence,"image_path":str(target)})
-        await _finish_recognition(card, db, osd_rotation, target, history)
-        return
-    with Image.open(source) as image: width, height = image.size
-    order = orientation_order(width, height)
-    attempts, best = [], None
-    for rotation in order:
-        attempt = await _read_rotated(card, rotation)
-        attempts.append({"rotation": rotation, "score": attempt["score"], "length": len(attempt["text"] or "")})
-        if best is None or attempt["score"] > best["score"]: best = attempt
-        if attempt["score"] >= ORIENTATION_ACCEPT_SIGNALS: break
-    card.oriented_image_path, card.orientation = str(best["path"]), best["rotation"]
-    db.add(OCRResult(card_id=card.id, engine="ykr-multimodal", engine_version=settings.ai_model, raw_text=best["text"], raw_json=best["response"]))
-    db.add(ProcessingHistory(card_id=card.id, process_type="orientation", engine="ykr-multimodal", version=settings.ai_model, input_json={"order":order,"accept_signals":ORIENTATION_ACCEPT_SIGNALS,"osd_rotation":osd_rotation,"osd_confidence":osd_confidence}, output_json={"attempts":attempts,"chosen":best["rotation"],"image_path":str(best["path"])}))
-    db.add(ProcessingHistory(card_id=card.id, process_type="ocr", engine="ykr-multimodal", version=settings.ai_model, input_json={"prompt":OCR_PROMPT,"orientation":best["rotation"]}, output_json={"raw_text":best["text"]}))
-    card.status = "ocr_completed"; db.commit()
-
 def apply_orientation(card: BusinessCard, db: Session, rotation: int):
     """ユーザーが指定した向きを確定させる。自動判定の派生画像を上書きしないよう、
     読み取り回数を足したファイル名に書き出して訂正の履歴を残す。"""
@@ -365,8 +270,8 @@ def apply_orientation(card: BusinessCard, db: Session, rotation: int):
     db.commit()
 
 async def run_ocr(card: BusinessCard, db: Session):
-    """いま確定している向きのままOCRし直す。向きをユーザーが指定した直後に使うので、
-    ここで探索をやり直すと指定を上書きしてしまう。"""
+    """いま確定している向き（初回は撮影時のまま、ユーザーが直していればその向き）でOCRする。
+    向きは探索せず常に現状の向きを信頼する。"""
     card.status = "ocr_processing"; db.commit()
     encoded = encode_for_ocr(Path(card.oriented_image_path or card.corrected_image_path))
     text, response = await chat([{"role":"user","content":[{"type":"text","text":OCR_PROMPT},{"type":"image_url","image_url":{"url":f"data:image/jpeg;base64,{encoded}"}}]}])
@@ -394,7 +299,7 @@ async def _process_card(card_id: str):
         with SessionLocal() as db:
             card = db.get(BusinessCard, card_id)
             try:
-                await recognize_card(card, db); await structure(card, db); return
+                await run_ocr(card, db); await structure(card, db); return
             except Exception:
                 db.rollback()
                 if attempt:

@@ -11,7 +11,7 @@ from .directory import models as directory_models, service as directory_service
 from .directory.routes import router as directory_router
 from .models import AuditLog, BusinessCard, Contact, Group, OCRResult, Organization, Photo, TrustedDevice, User, UserGroup
 from .schemas import BatchConfirmInput, CardRegistrationInput, CompleteReviewInput, ContactInput, GroupInput, LoginInput, ManualCardInput, OrientationInput, OrganizationInput, PasswordResetInput, ReprocessInput, TotpInput, UserInput
-from .services import add_manual_card, apply_orientation, card_image_revision, card_thumbnail, delete_card, delete_photo, image_size, photo_thumbnail, process_card, process_photo, recognize_card, run_ocr, structure, user_group_ids, visible_photo_query
+from .services import add_manual_card, apply_orientation, card_image_revision, card_thumbnail, delete_card, delete_photo, image_size, photo_thumbnail, process_card, process_photo, run_ocr, structure, user_group_ids, visible_photo_query
 from .settings import settings
 
 # 写真サムネイルは原本ごと、名刺サムネイルは向き補正画像のrevisionごとにURLが変わる。
@@ -307,9 +307,8 @@ def update_registration(card_id: str, body: CardRegistrationInput, db: Session=D
 async def reprocess(card_id: str, body: ReprocessInput, db: Session=Depends(get_db), user: User=Depends(current_user)):
     c=card_for_user(card_id,db,user)
     try:
-        # 「もう一度読み取る」を押すのは結果がおかしいときで、向き違いはその有力な原因。
-        # 現在の向きに固定せず、探索からやり直す。
-        if body.ocr: await recognize_card(c,db)
+        # 向きは探索せず、現在の向き（ユーザーが直していればその向き）のままOCRし直す。
+        if body.ocr: await run_ocr(c,db)
         if body.llm: await structure(c,db)
     except ValueError as exc: raise HTTPException(502, str(exc)) from exc
     return {"status":c.status}

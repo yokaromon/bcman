@@ -1,0 +1,3 @@
+# Drop automatic Reading Orientation detection
+
+Reading Orientation is no longer guessed automatically; it now always defaults to how the card was photographed (0 degrees), and only the user's manual 90-degree correction changes it. This supersedes ADR 0008 and ADR 0011 (and the undocumented Tesseract OSD pre-check added after them): both the OSD short-circuit and the AI scoring search made orientation state harder to reason about — a rotation the user had just corrected could be silently re-derived by a later re-recognition, and the two-tier fallback added complexity without a reliability payoff worth it. Recognition now always reads the card as-is; getting the orientation right is the user's job via the existing 90-degree rotation control.
