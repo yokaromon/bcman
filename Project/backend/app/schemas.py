@@ -29,7 +29,9 @@ class ManualCardInput(BaseModel):
     corners: list[tuple[float, float]] = Field(min_length=4, max_length=4)
 class CompleteReviewInput(BaseModel): retain_photo: bool = False
 class BatchConfirmInput(BaseModel): card_ids: list[str] = Field(min_length=1)
-class OrientationInput(BaseModel): rotation: int = Field(ge=0, le=270, multiple_of=90)
+class OrientationInput(BaseModel):
+    rotation: int = Field(ge=0, le=270, multiple_of=90)
+    reread: bool = True
 class CardRegistrationInput(BaseModel):
     card_owner_user_id: str
     exchanged_at: date

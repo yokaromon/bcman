@@ -317,6 +317,8 @@ async def set_orientation(card_id: str, body: OrientationInput, db: Session=Depe
     c=card_for_user(card_id,db,user)
     try:
         apply_orientation(c, db, body.rotation)
-        await run_ocr(c, db); await structure(c, db)
+        # 登録時に未確定の回転だけを書き込む経路は、フォームの入力値を再抽出結果で
+        # 上書きしないよう、再読み取り(reread)を省略できる。
+        if body.reread: await run_ocr(c, db); await structure(c, db)
     except ValueError as exc: raise HTTPException(502, str(exc)) from exc
     return {"status":c.status,"orientation":c.orientation}

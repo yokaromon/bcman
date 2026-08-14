@@ -261,8 +261,8 @@ export function updateCardRegistration(
 export function reprocessCard(cardId: string): Promise<{ status: CardStatus }> {
   return request<{ status: CardStatus }>(`/cards/${cardId}/reprocess`, jsonInit('POST', { ocr: true, llm: true }));
 }
-export function setCardOrientation(cardId: string, rotation: number): Promise<{ status: CardStatus; orientation: number }> {
-  return request(`/cards/${cardId}/orientation`, jsonInit('POST', { rotation }));
+export function setCardOrientation(cardId: string, rotation: number, reread = true): Promise<{ status: CardStatus; orientation: number }> {
+  return request(`/cards/${cardId}/orientation`, jsonInit('POST', { rotation, reread }));
 }
 
 export function deletePhoto(photoId: string): Promise<{ deleted: boolean }> {

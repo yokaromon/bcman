@@ -119,6 +119,14 @@ export function CardReviewBody({ cardId, failed, confirmLabel, onConfirmed, onPr
     setBusy('登録しています…');
     setErrorMessage('');
     try {
+      // プレビューで回転しただけで「この向きで再認識」を押さずに登録すると、画像が
+      // 撮影時の向きのまま保存されてしまう。登録時に未確定の回転が残っていれば、
+      // 入力済みのフィールドを上書きしないよう画像・向きだけ書き込んでおく。
+      if (detail && previewRotation !== 0) {
+        await setCardOrientation(cardId, (detail.orientation + previewRotation) % 360, false);
+        setPreviewRotation(0); onPreviewRotation(0);
+        onOrientationCommitted?.();
+      }
       await saveContact(cardId, values, [...editedFieldsRef.current]);
       await confirmCard(cardId);
       dirtyRef.current = false;
