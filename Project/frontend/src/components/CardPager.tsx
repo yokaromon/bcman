@@ -19,6 +19,7 @@ type Props = {
   onDeleted?: (cardId: string) => void;
   onFinish?: () => void;
   onCandidates?: () => void;
+  onUpdated?: () => void;
 };
 
 export function CardPager({
@@ -31,6 +32,7 @@ export function CardPager({
   onDeleted,
   onFinish,
   onCandidates,
+  onUpdated,
 }: Props) {
   const touchStart = useRef<{ x: number; y: number } | null>(null);
   const [errorMessage, setErrorMessage] = useState('');
@@ -150,6 +152,7 @@ export function CardPager({
           onConfirmed={onConfirmed}
           onPreviewRotation={setPreviewRotation}
           onImageRevision={setImageRevision}
+          onOrientationCommitted={onUpdated}
         />
       ) : (
         <div className="waiting">

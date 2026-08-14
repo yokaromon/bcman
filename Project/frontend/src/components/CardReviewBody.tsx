@@ -44,9 +44,10 @@ type Props = {
   onConfirmed: (cardId: string) => void;
   onPreviewRotation: (rotation: number) => void;
   onImageRevision: (revision: string) => void;
+  onOrientationCommitted?: () => void;
 };
 
-export function CardReviewBody({ cardId, failed, confirmLabel, onConfirmed, onPreviewRotation, onImageRevision }: Props) {
+export function CardReviewBody({ cardId, failed, confirmLabel, onConfirmed, onPreviewRotation, onImageRevision, onOrientationCommitted }: Props) {
   const [detail, setDetail] = useState<CardDetail | null>(null);
   const [values, setValues] = useState<ContactInput>(() => toContactInput(null));
   const [busy, setBusy] = useState('');
@@ -168,6 +169,7 @@ export function CardReviewBody({ cardId, failed, confirmLabel, onConfirmed, onPr
     try {
       await setCardOrientation(cardId, (detail.orientation + previewRotation) % 360);
       await load();
+      onOrientationCommitted?.();
     } catch (error) { setErrorMessage(error instanceof Error ? error.message : '向きの補正に失敗しました'); }
     finally { setBusy(''); }
   };

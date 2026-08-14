@@ -258,6 +258,7 @@ export function CaptureFlow({ user }: { user: Me | null }) {
       onDeleted={handleDeleted}
       onFinish={() => setPhase('done')}
       onCandidates={() => setShowCandidates(true)}
+      onUpdated={() => { void fetchCards(photoId).then(setCards); }}
     />
   );
 }
