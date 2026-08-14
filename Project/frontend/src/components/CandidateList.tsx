@@ -22,7 +22,7 @@ export function CandidateList({ photoId, cards, onOpen, onUpdated, onBack }: Pro
     <ul className="candidate-list">{cards.map((card, index) => <li key={card.id} className="candidate">
       <input aria-label={`名刺 ${index + 1} を選択`} type="checkbox" disabled={card.status !== 'review_required'} checked={selected.has(card.id)} onChange={() => toggle(card.id)} />
       <button type="button" className="candidate__body" onClick={() => onOpen(index)}>
-        <img src={cardThumbnailUrl(card.id)} alt={`名刺 ${index + 1}`} />
+        <img src={cardThumbnailUrl(card.id, card.image_revision)} alt={`名刺 ${index + 1}`} />
         <span>名刺 {index + 1}<small>{cardStatusLabel(card.status)}</small></span>
       </button>
     </li>)}</ul>

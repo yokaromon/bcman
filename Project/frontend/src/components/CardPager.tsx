@@ -35,10 +35,14 @@ export function CardPager({
   const touchStart = useRef<{ x: number; y: number } | null>(null);
   const [errorMessage, setErrorMessage] = useState('');
   const [previewRotation, setPreviewRotation] = useState(0);
+  const [imageRevision, setImageRevision] = useState('');
   const card = cards[index];
   const total = cards.length;
 
-  useEffect(() => { setPreviewRotation(0); }, [card?.id]);
+  useEffect(() => {
+    setPreviewRotation(0);
+    setImageRevision(card?.image_revision ?? '');
+  }, [card?.id, card?.image_revision]);
 
   const goTo = (next: number) => {
     const clamped = Math.min(Math.max(next, 0), total - 1);
@@ -97,7 +101,7 @@ export function CardPager({
     <div className="screen screen--form">
       {/* 入力欄でのカーソル移動と競合しないよう、スワイプは画像の上だけで拾う */}
       <div className="card-image" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
-        <img className={previewRotation ? 'card-image__rotated' : ''} style={{ transform: `rotate(${previewRotation}deg)` }} src={cardImageUrl(card.id)} alt={`名刺 ${index + 1} の画像`} />
+        <img key={`${card.id}-${imageRevision}`} className={previewRotation ? 'card-image__rotated' : ''} style={{ transform: `rotate(${previewRotation}deg)` }} src={cardImageUrl(card.id, imageRevision || card.image_revision)} alt={`名刺 ${index + 1} の画像`} />
         {total > 1 && <span className="card-image__hint">← 画像を左右にスワイプで切り替え →</span>}
       </div>
 
@@ -145,6 +149,7 @@ export function CardPager({
           confirmLabel={confirmLabel}
           onConfirmed={onConfirmed}
           onPreviewRotation={setPreviewRotation}
+          onImageRevision={setImageRevision}
         />
       ) : (
         <div className="waiting">

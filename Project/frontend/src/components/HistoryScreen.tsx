@@ -153,7 +153,7 @@ export function HistoryScreen({ user }: { user: Me | null }) {
           {cards.map((card, index) => (
             <li key={card.id}>
               <MediaCard
-                src={cardThumbnailUrl(card.id)}
+                src={cardThumbnailUrl(card.id, card.image_revision)}
                 alt={`名刺 ${index + 1}`}
                 title={`名刺 ${index + 1}`}
                 meta={cardStatusLabel(card.status)}

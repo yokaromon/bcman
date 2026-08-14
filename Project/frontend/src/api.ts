@@ -64,6 +64,7 @@ export type CardSummary = {
   id: string;
   status: CardStatus;
   confidence: number;
+  image_revision: string;
   bounding_box: { x: number; y: number; width: number; height: number };
 };
 
@@ -103,6 +104,7 @@ export type CardDetail = {
   id: string;
   status: CardStatus;
   image_url: string;
+  image_revision: string;
   contact: Contact | null;
   ocr_text: string;
   review_flags: Partial<Record<ContactField, string>>;
@@ -148,12 +150,12 @@ function jsonInit(method: string, body: unknown): RequestInit {
  * サーバーの CardDetail.image_url は "/api/..." を返すため、そのまま API_BASE に
  * 連結すると /bcman/api/api/... になる。画像URLはここで組み立てる。
  */
-export function cardImageUrl(cardId: string): string {
-  return `${API_BASE}/cards/${cardId}/image`;
+export function cardImageUrl(cardId: string, revision: string): string {
+  return `${API_BASE}/cards/${cardId}/image?v=${encodeURIComponent(revision)}`;
 }
 
-export function cardThumbnailUrl(cardId: string): string {
-  return `${API_BASE}/cards/${cardId}/thumbnail`;
+export function cardThumbnailUrl(cardId: string, revision: string): string {
+  return `${API_BASE}/cards/${cardId}/thumbnail?v=${encodeURIComponent(revision)}`;
 }
 
 export function photoThumbnailUrl(photoId: string): string {

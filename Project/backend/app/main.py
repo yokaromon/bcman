@@ -11,12 +11,14 @@ from .directory import models as directory_models, service as directory_service
 from .directory.routes import router as directory_router
 from .models import AuditLog, BusinessCard, Contact, Group, OCRResult, Organization, Photo, TrustedDevice, User, UserGroup
 from .schemas import BatchConfirmInput, CardRegistrationInput, CompleteReviewInput, ContactInput, GroupInput, LoginInput, ManualCardInput, OrientationInput, OrganizationInput, PasswordResetInput, ReprocessInput, TotpInput, UserInput
-from .services import add_manual_card, apply_orientation, card_thumbnail, delete_card, delete_photo, image_size, photo_thumbnail, process_card, process_photo, recognize_card, run_ocr, structure, user_group_ids, visible_photo_query
+from .services import add_manual_card, apply_orientation, card_image_revision, card_thumbnail, delete_card, delete_photo, image_size, photo_thumbnail, process_card, process_photo, recognize_card, run_ocr, structure, user_group_ids, visible_photo_query
 from .settings import settings
 
-# サムネイルは中身が変わらず、変われば元の名刺ごと別IDになる。
-# 一覧を開くたびに取り直させる理由がないので、しばらくブラウザに持たせる。
+# 写真サムネイルは原本ごと、名刺サムネイルは向き補正画像のrevisionごとにURLが変わる。
+# 同じURLの中身は変わらないので、しばらくブラウザに持たせる。
 THUMBNAIL_CACHE_CONTROL = "private, max-age=604800"
+VERSIONED_IMAGE_CACHE_CONTROL = "private, max-age=31536000, immutable"
+MUTABLE_IMAGE_CACHE_CONTROL = "private, no-cache"
 
 app = FastAPI(title="BCMan API", root_path=settings.root_path)
 app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173"], allow_methods=["*"], allow_headers=["*"], allow_credentials=True)
@@ -47,11 +49,11 @@ def card_for_user(card_id, db, user):
     return card
 def record_audit(db, user, action, target_type, target_id, detail):
     db.add(AuditLog(user_id=user.id, user_name=user.name, action=action, target_type=target_type, target_id=target_id, detail=detail))
-def thumbnail_response(build):
+def thumbnail_response(build, cache_control=THUMBNAIL_CACHE_CONTROL):
     # 元画像が消えている古いデータでも一覧そのものは開けるよう、画像だけ 404 にする
     try: path = build()
     except (FileNotFoundError, OSError) as exc: raise HTTPException(404, "画像がありません") from exc
-    return FileResponse(path, headers={"Cache-Control": THUMBNAIL_CACHE_CONTROL})
+    return FileResponse(path, headers={"Cache-Control": cache_control})
 def require_group_in_org(db: Session, org_id: str, group_ids: list[str]):
     found = db.query(Group).filter(Group.organization_id == org_id, Group.id.in_(group_ids)).count()
     if found != len(set(group_ids)): raise HTTPException(400, "指定したグループがこの組織にありません")
@@ -245,22 +247,26 @@ def process(photo_id: str, tasks: BackgroundTasks, db: Session=Depends(get_db), 
 @app.get("/api/photos/{photo_id}/cards")
 def cards(photo_id: str, db: Session=Depends(get_db), user: User=Depends(current_user)):
     if not visible_photo_query(db,user).filter_by(id=photo_id).first(): raise HTTPException(404,"写真が見つかりません")
-    return [{"id":c.id,"status":c.status,"confidence":c.detection_confidence,"bounding_box":{"x":c.x,"y":c.y,"width":c.width,"height":c.height}} for c in db.query(BusinessCard).filter_by(photo_id=photo_id)]
+    return [{"id":c.id,"status":c.status,"confidence":c.detection_confidence,"image_revision":card_image_revision(c),"bounding_box":{"x":c.x,"y":c.y,"width":c.width,"height":c.height}} for c in db.query(BusinessCard).filter_by(photo_id=photo_id)]
 @app.get("/api/cards/{card_id}")
 def card(card_id: str, db: Session=Depends(get_db), user: User=Depends(current_user)):
     c=card_for_user(card_id,db,user); contact=db.query(Contact).filter_by(card_id=c.id).first(); ocr=db.query(OCRResult).filter_by(card_id=c.id).order_by(OCRResult.created_at.desc()).first()
-    return {"id":c.id,"status":c.status,"image_url":f"/api/cards/{c.id}/image","contact":{k:getattr(contact,k) for k in Contact.__table__.columns.keys()} if contact else None,"ocr_text":ocr.raw_text if ocr else "","review_flags":contact.review_flags if contact else {},"orientation":c.orientation}
+    revision=card_image_revision(c)
+    return {"id":c.id,"status":c.status,"image_url":f"/api/cards/{c.id}/image?v={revision}","image_revision":revision,"contact":{k:getattr(contact,k) for k in Contact.__table__.columns.keys()} if contact else None,"ocr_text":ocr.raw_text if ocr else "","review_flags":contact.review_flags if contact else {},"orientation":c.orientation}
 @app.delete("/api/cards/{card_id}")
 def remove_card(card_id: str, db: Session=Depends(get_db), user: User=Depends(current_user)):
     card=card_for_user(card_id,db,user)
     record_audit(db,user,"delete","card",card_id,delete_card(card,db)); db.commit(); return {"deleted":True}
 @app.get("/api/cards/{card_id}/image")
-def card_image(card_id: str, db: Session=Depends(get_db), user: User=Depends(current_user)):
-    card=card_for_user(card_id,db,user); return FileResponse(card.oriented_image_path or card.corrected_image_path)
-@app.get("/api/cards/{card_id}/thumbnail")
-def card_thumb(card_id: str, db: Session=Depends(get_db), user: User=Depends(current_user)):
+def card_image(card_id: str, v: str | None=None, db: Session=Depends(get_db), user: User=Depends(current_user)):
     card=card_for_user(card_id,db,user)
-    return thumbnail_response(lambda: card_thumbnail(card))
+    cache_control = VERSIONED_IMAGE_CACHE_CONTROL if v == card_image_revision(card) else MUTABLE_IMAGE_CACHE_CONTROL
+    return FileResponse(card.oriented_image_path or card.corrected_image_path, headers={"Cache-Control":cache_control})
+@app.get("/api/cards/{card_id}/thumbnail")
+def card_thumb(card_id: str, v: str | None=None, db: Session=Depends(get_db), user: User=Depends(current_user)):
+    card=card_for_user(card_id,db,user)
+    cache_control = VERSIONED_IMAGE_CACHE_CONTROL if v == card_image_revision(card) else MUTABLE_IMAGE_CACHE_CONTROL
+    return thumbnail_response(lambda: card_thumbnail(card), cache_control)
 @app.post("/api/cards/{card_id}/ocr")
 async def ocr(card_id: str, db: Session=Depends(get_db), user: User=Depends(current_user)):
     c=card_for_user(card_id,db,user)

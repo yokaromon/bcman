@@ -43,9 +43,10 @@ type Props = {
   confirmLabel: string;
   onConfirmed: (cardId: string) => void;
   onPreviewRotation: (rotation: number) => void;
+  onImageRevision: (revision: string) => void;
 };
 
-export function CardReviewBody({ cardId, failed, confirmLabel, onConfirmed, onPreviewRotation }: Props) {
+export function CardReviewBody({ cardId, failed, confirmLabel, onConfirmed, onPreviewRotation, onImageRevision }: Props) {
   const [detail, setDetail] = useState<CardDetail | null>(null);
   const [values, setValues] = useState<ContactInput>(() => toContactInput(null));
   const [busy, setBusy] = useState('');
@@ -72,6 +73,7 @@ export function CardReviewBody({ cardId, failed, confirmLabel, onConfirmed, onPr
     try {
       const loaded = await fetchCard(cardId);
       setDetail(loaded);
+      onImageRevision(loaded.image_revision);
       const initial = toContactInput(loaded.contact);
       setValues(initial);
       draftRef.current = initial;
@@ -81,7 +83,7 @@ export function CardReviewBody({ cardId, failed, confirmLabel, onConfirmed, onPr
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : '名刺を読み込めませんでした');
     }
-  }, [cardId]);
+  }, [cardId, onImageRevision, onPreviewRotation]);
 
   useEffect(() => {
     setDetail(null);

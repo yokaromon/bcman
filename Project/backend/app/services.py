@@ -75,9 +75,23 @@ def ensure_thumbnail(source: Path, thumb: Path) -> Path:
 def photo_thumbnail(photo: Photo) -> Path:
     return ensure_thumbnail(Path(photo.storage_path), settings.storage_dir / "photos" / photo.id / "thumb.jpg")
 
+def card_image_revision(card: BusinessCard) -> str:
+    """向き補正画像が差し替わるたびに変わる、表示キャッシュ用の識別子を返す。
+    orientation だけでは同じ角度での再認識を区別できないため、保存先と更新時刻も含める。"""
+    source = Path(card.oriented_image_path or card.corrected_image_path)
+    try:
+        stat = source.stat()
+        freshness = f"{stat.st_mtime_ns:x}-{stat.st_size:x}"
+    except OSError:
+        # 画像が失われた古いレコードでもカード一覧API自体は返せるようにする
+        freshness = "missing"
+    return f"{card.orientation}-{source.stem}-{freshness}"
+
 def card_thumbnail(card: BusinessCard) -> Path:
     source = Path(card.oriented_image_path or card.corrected_image_path)
-    return ensure_thumbnail(source, source.parent / "thumb.jpg")
+    # 向き補正前の thumb.jpg を再利用すると、回転後も一覧だけ古い向きのままになる。
+    # 元画像のrevisionごとに別ファイルへ出し、ブラウザ側のversion付きURLと対応させる。
+    return ensure_thumbnail(source, source.parent / f"thumb-{card_image_revision(card)}.jpg")
 
 def delete_card(card: BusinessCard, db: Session) -> dict:
     """名刺と派生データを物理削除し、監査ログに残す要約を返す。
