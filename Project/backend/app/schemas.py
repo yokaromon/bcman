@@ -35,3 +35,7 @@ class OrientationInput(BaseModel):
 class CardRegistrationInput(BaseModel):
     card_owner_user_id: str
     exchanged_at: date
+class ReplacementApplyInput(BaseModel):
+    """撮り直した画像を採用するとき、読み取りもやり直すか。
+    やり直すと構造化の結果で14項目が上書きされる（手入力も消える）。"""
+    reread: bool = False

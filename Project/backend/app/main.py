@@ -1,3 +1,4 @@
+import re
 import shutil
 from pathlib import Path
 from fastapi import BackgroundTasks, Depends, FastAPI, File, HTTPException, Request, Response, UploadFile
@@ -6,16 +7,22 @@ from fastapi.responses import FileResponse
 from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 from . import auth
+from .contact_search import search_contacts
 from .database import Base, SessionLocal, engine, get_db
 from .directory import models as directory_models, service as directory_service
 from .directory.routes import router as directory_router
 from .models import AuditLog, BusinessCard, Contact, Group, OCRResult, Organization, Photo, TrustedDevice, User, UserGroup
-from .schemas import BatchConfirmInput, CardRegistrationInput, CompleteReviewInput, ContactInput, GroupInput, LoginInput, ManualCardInput, OrientationInput, OrganizationInput, PasswordResetInput, ReprocessInput, TotpInput, UserInput
-from .services import add_manual_card, apply_orientation, card_image_revision, card_thumbnail, delete_card, delete_photo, image_size, photo_thumbnail, process_card, process_photo, run_ocr, structure, user_group_ids, visible_photo_query
+from .schemas import BatchConfirmInput, CardRegistrationInput, CompleteReviewInput, ContactInput, GroupInput, LoginInput, ManualCardInput, OrientationInput, OrganizationInput, PasswordResetInput, ReplacementApplyInput, ReprocessInput, TotpInput, UserInput
+from .search_text import refresh_search_text
+from .services import add_manual_card, apply_orientation, apply_replacement, card_image_revision, card_thumbnail, delete_card, delete_photo, discard_replacement, image_size, pending_replacement_path, photo_thumbnail, prepare_replacement, process_card, process_photo, run_ocr, structure, user_group_ids, visible_photo_query
 from .settings import settings
 
 # 写真サムネイルは原本ごと、名刺サムネイルは向き補正画像のrevisionごとにURLが変わる。
 # 同じURLの中身は変わらないので、しばらくブラウザに持たせる。
+# 台帳の1ページ。上限は、利用者が limit を大きくしても1回の応答が膨らみすぎないための頭打ち。
+LEDGER_PAGE_SIZE = 50
+LEDGER_MAX_PAGE_SIZE = 200
+
 THUMBNAIL_CACHE_CONTROL = "private, max-age=604800"
 VERSIONED_IMAGE_CACHE_CONTROL = "private, max-age=31536000, immutable"
 MUTABLE_IMAGE_CACHE_CONTROL = "private, no-cache"
@@ -34,9 +41,20 @@ def bootstrap():
         with engine.begin() as connection:
             columns = {row[1] for row in connection.execute(text("PRAGMA table_info(contacts)"))}
             if "review_flags" not in columns: connection.execute(text("ALTER TABLE contacts ADD COLUMN review_flags JSON DEFAULT '{}'"))
+            if "search_text" not in columns: connection.execute(text("ALTER TABLE contacts ADD COLUMN search_text TEXT DEFAULT ''"))
             card_columns = {row[1] for row in connection.execute(text("PRAGMA table_info(business_cards)"))}
             if "oriented_image_path" not in card_columns: connection.execute(text("ALTER TABLE business_cards ADD COLUMN oriented_image_path VARCHAR DEFAULT ''"))
             if "orientation" not in card_columns: connection.execute(text("ALTER TABLE business_cards ADD COLUMN orientation INTEGER DEFAULT 0"))
+    backfill_search_text()
+
+def backfill_search_text():
+    """search_text 列を足す前から在る Contact を検索対象に載せる。
+    未設定の行だけを対象にするので、起動のたびに全件を作り直すことはない。"""
+    with SessionLocal() as db:
+        pending = db.query(Contact).filter((Contact.search_text == "") | (Contact.search_text.is_(None))).all()
+        if not pending: return
+        for contact in pending: refresh_search_text(contact)
+        db.commit()
 @app.on_event("startup")
 def startup(): bootstrap()
 
@@ -249,6 +267,12 @@ def process(photo_id: str, tasks: BackgroundTasks, db: Session=Depends(get_db), 
 def cards(photo_id: str, db: Session=Depends(get_db), user: User=Depends(current_user)):
     if not visible_photo_query(db,user).filter_by(id=photo_id).first(): raise HTTPException(404,"写真が見つかりません")
     return [{"id":c.id,"status":c.status,"confidence":c.detection_confidence,"image_revision":card_image_revision(c),"bounding_box":{"x":c.x,"y":c.y,"width":c.width,"height":c.height}} for c in db.query(BusinessCard).filter_by(photo_id=photo_id)]
+# --- 台帳（登録済み連絡先の検索）。docs/CONTEXT.md の「台帳検索」参照 ---
+
+@app.get("/api/contacts")
+def list_contacts(q: str="", limit: int=LEDGER_PAGE_SIZE, offset: int=0, db: Session=Depends(get_db), user: User=Depends(current_user)):
+    return search_contacts(db, user, q, min(max(limit,1), LEDGER_MAX_PAGE_SIZE), max(offset,0))
+
 @app.get("/api/cards/{card_id}")
 def card(card_id: str, db: Session=Depends(get_db), user: User=Depends(current_user)):
     c=card_for_user(card_id,db,user); contact=db.query(Contact).filter_by(card_id=c.id).first(); ocr=db.query(OCRResult).filter_by(card_id=c.id).order_by(OCRResult.created_at.desc()).first()
@@ -284,9 +308,18 @@ async def struct(card_id: str, db: Session=Depends(get_db), user: User=Depends(c
 def save_contact(card_id: str, body: ContactInput, db: Session=Depends(get_db), user: User=Depends(current_user)):
     c=card_for_user(card_id,db,user); contact=db.query(Contact).filter_by(card_id=c.id).first() or Contact(card_id=c.id)
     values=body.model_dump(); resolved=set(values.pop("resolved_fields", []))
+    # 未入力はフォームからは "" 、DBには NULL で来る。同じ「空」を変更として数えない
+    changed={key for key,value in values.items() if (getattr(contact,key,None) or "") != (value or "")}
+    was_confirmed=bool(contact.confirmed)
     for key,value in values.items(): setattr(contact,key,value)
     contact.review_flags={key:value for key,value in (contact.review_flags or {}).items() if key not in resolved}
-    db.add(contact); db.commit(); return contact
+    refresh_search_text(contact)
+    db.add(contact); db.flush()
+    if was_confirmed and changed:
+        # 登録済みの台帳を書き換えた記録。値そのものは残さない（監査ログに個人情報を溜めない）
+        record_audit(db,user,"update","contact",contact.id,{"card_id":c.id,"fields":sorted(changed)})
+        directory_service.rematch_contact(contact, changed, user, db)
+    db.commit(); return contact
 @app.post("/api/cards/{card_id}/confirm")
 def confirm(card_id: str, db: Session=Depends(get_db), user: User=Depends(current_user)):
     c=card_for_user(card_id,db,user); contact=db.query(Contact).filter_by(card_id=c.id).first()
@@ -314,6 +347,54 @@ async def reprocess(card_id: str, body: ReprocessInput, db: Session=Depends(get_
         if body.llm: await structure(c,db)
     except ValueError as exc: raise HTTPException(502, str(exc)) from exc
     return {"status":c.status}
+# --- 名刺画像の撮り直し。採用するまで既存の画像に触れない2段構え（docs/adr/0013 参照） ---
+
+@app.post("/api/cards/{card_id}/replacement")
+async def start_replacement(card_id: str, file: UploadFile=File(...), db: Session=Depends(get_db), user: User=Depends(current_user)):
+    c=card_for_user(card_id,db,user)
+    if file.content_type not in {"image/jpeg","image/png"}: raise HTTPException(415, "JPEG または PNG のみ対応")
+    upload=Path(c.corrected_image_path).parent / "pending-upload.tmp"; upload.parent.mkdir(parents=True, exist_ok=True)
+    with upload.open("wb") as out: shutil.copyfileobj(file.file, out)
+    try:
+        if upload.stat().st_size > settings.max_upload_bytes: raise HTTPException(413, "20MBを超えています")
+        try: token, detected = prepare_replacement(c, upload)
+        except ValueError as exc: raise HTTPException(400, str(exc)) from exc
+    finally:
+        upload.unlink(missing_ok=True)
+    return {"token":token,"detected":detected}
+
+def pending_replacement_for_user(card_id: str, token: str, db: Session, user: User):
+    card=card_for_user(card_id,db,user)
+    # トークンはファイル名になる。生成した16進以外は受け取らず、パスを組み立てさせない
+    if not re.fullmatch(r"[0-9a-f]{32}", token): raise HTTPException(404, "撮り直した画像が見つかりません")
+    return card
+
+@app.get("/api/cards/{card_id}/replacement/{token}")
+def replacement_preview(card_id: str, token: str, db: Session=Depends(get_db), user: User=Depends(current_user)):
+    card=pending_replacement_for_user(card_id,token,db,user)
+    path=pending_replacement_path(card, token)
+    if not path.exists(): raise HTTPException(404, "撮り直した画像が見つかりません")
+    return FileResponse(path, headers={"Cache-Control":MUTABLE_IMAGE_CACHE_CONTROL})
+
+@app.delete("/api/cards/{card_id}/replacement/{token}")
+def cancel_replacement(card_id: str, token: str, db: Session=Depends(get_db), user: User=Depends(current_user)):
+    discard_replacement(pending_replacement_for_user(card_id,token,db,user), token); return {"discarded":True}
+
+@app.post("/api/cards/{card_id}/replacement/{token}/apply")
+async def commit_replacement(card_id: str, token: str, body: ReplacementApplyInput, db: Session=Depends(get_db), user: User=Depends(current_user)):
+    card=pending_replacement_for_user(card_id,token,db,user)
+    was_confirmed = card.status == "confirmed"
+    try: apply_replacement(card, db, token)
+    except ValueError as exc: raise HTTPException(404, str(exc)) from exc
+    record_audit(db,user,"replace_image","card",card.id,{"reread":body.reread}); db.commit()
+    if body.reread:
+        try: await run_ocr(card, db); await structure(card, db)
+        except ValueError as exc: raise HTTPException(502, str(exc)) from exc
+        # structure() は解析直後の状態として review_required を立てる。読み直しは登録を
+        # 取り消す操作ではないので、登録済みだった名刺は登録済みのまま戻す
+        if was_confirmed: card.status = "confirmed"; db.commit()
+    return {"status":card.status,"image_revision":card_image_revision(card)}
+
 @app.post("/api/cards/{card_id}/orientation")
 async def set_orientation(card_id: str, body: OrientationInput, db: Session=Depends(get_db), user: User=Depends(current_user)):
     c=card_for_user(card_id,db,user)
