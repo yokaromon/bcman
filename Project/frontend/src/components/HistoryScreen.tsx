@@ -40,6 +40,15 @@ function describeCounts(photo: PhotoSummary): string {
   return `名刺 ${photo.card_count}枚 / 登録済み ${photo.confirmed_count}`;
 }
 
+function unregisteredCount(photo: PhotoSummary): number {
+  return Math.max(photo.card_count - photo.confirmed_count, 0);
+}
+
+/** 登録が済んでいない印。枚数を数えなくても、やり残しのある写真・名刺が一目で分かるようにする。 */
+function PendingBadge({ label }: { label: string }) {
+  return <span className="media-card__badge">{label}</span>;
+}
+
 function describePhotoDeletion(cards: CardSummary[]): string {
   if (cards.length === 0) {
     return 'この写真を削除します。元に戻せません。';
@@ -157,6 +166,7 @@ export function HistoryScreen({ user }: { user: Me | null }) {
                 alt={`名刺 ${index + 1}`}
                 title={`名刺 ${index + 1}`}
                 meta={cardStatusLabel(card.status)}
+                badge={card.status !== 'confirmed' ? <PendingBadge label="未登録" /> : null}
                 onClick={() => setOpenCardIndex(index)}
               />
             </li>
@@ -174,7 +184,7 @@ export function HistoryScreen({ user }: { user: Me | null }) {
 
   return (
     <div className="screen">
-      <h2 className="screen__title">履歴</h2>
+      {/* 見出しは台帳タブ側が出す。ここで「履歴」を重ねると二重の見出しになる */}
       {errorMessage && <p className="alert alert--error">{errorMessage}</p>}
       {loading && <p className="hint">読み込んでいます…</p>}
       {!loading && !errorMessage && photos.length === 0 && <p className="hint">まだ写真がありません。</p>}
@@ -191,6 +201,7 @@ export function HistoryScreen({ user }: { user: Me | null }) {
                   <span>{PHOTO_STATUS_LABELS[photo.status] ?? photo.status}</span>
                 </>
               }
+              badge={unregisteredCount(photo) > 0 ? <PendingBadge label={`未登録 ${unregisteredCount(photo)}枚`} /> : null}
               onClick={() => void openPhotoCards(photo)}
             />
           </li>
