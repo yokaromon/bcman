@@ -45,6 +45,7 @@ def _company_id_for_contact(db: Session, contact_id: str) -> str | None:
 # --- Confirmed Contact登録時のフック ---
 
 def register_confirmed_contact(contact_id: str, user: User, db: Session) -> None:
+    if _person_id_for_contact(db, contact_id): return  # 既に人物として登録済み(向き修正等での再送)。二重登録を防ぐ
     contact = db.get(Contact, contact_id)
     person = Person(organization_id=user.organization_id); db.add(person); db.flush()
     db.add(PersonContact(person_id=person.id, contact_id=contact.id))

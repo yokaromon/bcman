@@ -234,8 +234,9 @@ def confirm_cards(photo_id: str, body: BatchConfirmInput, db: Session=Depends(ge
     for card in cards:
         contact=db.query(Contact).filter_by(card_id=card.id).first()
         if card.status not in {"review_required", "confirmed"} or not contact or contact.review_flags: raise HTTPException(400,"要確認項目が残っている名刺が含まれています")
-        contact.confirmed=True; card.status="confirmed"
-        contact.card_owner_user_id, contact.exchanged_at = user.id, photo.created_at.date()
+        if not contact.confirmed:
+            contact.confirmed=True; card.status="confirmed"
+            contact.card_owner_user_id, contact.exchanged_at = user.id, photo.created_at.date()
         db.flush(); directory_service.register_confirmed_contact(contact.id, user, db)
     db.commit(); return {"confirmed_count":len(cards)}
 @app.post("/api/photos/{photo_id}/process")
@@ -291,8 +292,9 @@ def confirm(card_id: str, db: Session=Depends(get_db), user: User=Depends(curren
     c=card_for_user(card_id,db,user); contact=db.query(Contact).filter_by(card_id=c.id).first()
     if not contact: raise HTTPException(400,"連絡先情報がありません")
     photo=db.get(Photo,c.photo_id)
-    contact.confirmed=True; c.status="confirmed"
-    contact.card_owner_user_id, contact.exchanged_at = user.id, photo.created_at.date()
+    if not contact.confirmed:
+        contact.confirmed=True; c.status="confirmed"
+        contact.card_owner_user_id, contact.exchanged_at = user.id, photo.created_at.date()
     db.flush(); directory_service.register_confirmed_contact(contact.id, user, db)
     db.commit(); return {"status":"confirmed"}
 @app.put("/api/cards/{card_id}/registration")
