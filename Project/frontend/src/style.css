@@ -503,7 +503,10 @@ body {
   -webkit-user-select: none;
   -webkit-touch-callout: none;
 }
-.card-image img.card-image__rotated { max-height: none; max-width: 100%; transform-origin: center; }
+/* 撮影時は横長でも登録後は縦長画像になり得るため、回転プレビュー中も
+   高さ上限(42vh)は外さない。外すと縦長画像を再度回転したときに
+   表示ボックスが上限なしで縦に伸びてしまう。 */
+.card-image img.card-image__rotated { transform-origin: center; }
 .orientation-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 
 .card-image__hint {
