@@ -38,6 +38,7 @@ export function CardPager({
   const [errorMessage, setErrorMessage] = useState('');
   const [previewRotation, setPreviewRotation] = useState(0);
   const [imageRevision, setImageRevision] = useState('');
+  const [busy, setBusy] = useState(false);
   const card = cards[index];
   const total = cards.length;
 
@@ -45,6 +46,10 @@ export function CardPager({
     setPreviewRotation(0);
     setImageRevision(card?.image_revision ?? '');
   }, [card?.id, card?.image_revision]);
+
+  const rotatePreview = () => {
+    setPreviewRotation((current) => (current + 90) % 360);
+  };
 
   const goTo = (next: number) => {
     const clamped = Math.min(Math.max(next, 0), total - 1);
@@ -134,6 +139,15 @@ export function CardPager({
         </div>
         <button
           type="button"
+          className={previewRotation ? 'pager__arrow pager__arrow--active' : 'pager__arrow'}
+          aria-label="画像を90度回転"
+          disabled={busy}
+          onClick={rotatePreview}
+        >
+          <RotateIcon />
+        </button>
+        <button
+          type="button"
           className="pager__arrow"
           aria-label="次の名刺"
           disabled={index === total - 1}
@@ -149,10 +163,12 @@ export function CardPager({
           cardId={card.id}
           failed={failed}
           confirmLabel={confirmLabel}
+          previewRotation={previewRotation}
           onConfirmed={onConfirmed}
-          onPreviewRotation={setPreviewRotation}
+          onRotationChange={setPreviewRotation}
           onImageRevision={setImageRevision}
           onOrientationCommitted={onUpdated}
+          onBusyChange={setBusy}
         />
       ) : (
         <div className="waiting">
@@ -179,5 +195,14 @@ export function CardPager({
         </div>
       )}
     </div>
+  );
+}
+
+function RotateIcon() {
+  return (
+    <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 12a9 9 0 1 0 3-6.7" />
+      <polyline points="3 3 3 8 8 8" />
+    </svg>
   );
 }

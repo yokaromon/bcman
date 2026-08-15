@@ -432,6 +432,9 @@ body {
 }
 
 .pager__arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   min-width: var(--tap);
   min-height: var(--tap);
   border: 1px solid var(--line);
@@ -445,6 +448,12 @@ body {
 
 .pager__arrow:disabled {
   opacity: 0.35;
+}
+
+/* 回転プレビュー中（未確定の回転が残っている間）だけ強調表示する */
+.pager__arrow--active {
+  background: var(--accent);
+  color: #fff;
 }
 
 .pager__center {
@@ -507,7 +516,6 @@ body {
    高さ上限(42vh)は外さない。外すと縦長画像を再度回転したときに
    表示ボックスが上限なしで縦に伸びてしまう。 */
 .card-image img.card-image__rotated { transform-origin: center; }
-.orientation-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 
 .card-image__hint {
   position: absolute;

@@ -41,20 +41,25 @@ type Props = {
   cardId: string;
   failed: boolean;
   confirmLabel: string;
+  previewRotation: number;
   onConfirmed: (cardId: string) => void;
-  onPreviewRotation: (rotation: number) => void;
+  onRotationChange: (rotation: number) => void;
   onImageRevision: (revision: string) => void;
   onOrientationCommitted?: () => void;
+  onBusyChange?: (busy: boolean) => void;
 };
 
-export function CardReviewBody({ cardId, failed, confirmLabel, onConfirmed, onPreviewRotation, onImageRevision, onOrientationCommitted }: Props) {
+export function CardReviewBody({ cardId, failed, confirmLabel, previewRotation, onConfirmed, onRotationChange, onImageRevision, onOrientationCommitted, onBusyChange }: Props) {
   const [detail, setDetail] = useState<CardDetail | null>(null);
   const [values, setValues] = useState<ContactInput>(() => toContactInput(null));
   const [busy, setBusy] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
-  const [previewRotation, setPreviewRotation] = useState(0);
   const [members, setMembers] = useState<OrgMember[]>([]);
   const [registrationError, setRegistrationError] = useState('');
+
+  useEffect(() => {
+    onBusyChange?.(Boolean(busy));
+  }, [busy, onBusyChange]);
 
   useEffect(() => {
     fetchMembers()
@@ -80,11 +85,11 @@ export function CardReviewBody({ cardId, failed, confirmLabel, onConfirmed, onPr
       draftRef.current = initial;
       dirtyRef.current = false;
       editedFieldsRef.current = new Set();
-      setPreviewRotation(0); onPreviewRotation(0);
+      onRotationChange(0);
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : '名刺を読み込めませんでした');
     }
-  }, [cardId, onImageRevision, onPreviewRotation]);
+  }, [cardId, onImageRevision, onRotationChange]);
 
   useEffect(() => {
     setDetail(null);
@@ -124,7 +129,7 @@ export function CardReviewBody({ cardId, failed, confirmLabel, onConfirmed, onPr
       // 入力済みのフィールドを上書きしないよう画像・向きだけ書き込んでおく。
       if (detail && previewRotation !== 0) {
         await setCardOrientation(cardId, (detail.orientation + previewRotation) % 360, false);
-        setPreviewRotation(0); onPreviewRotation(0);
+        onRotationChange(0);
         onOrientationCommitted?.();
       }
       await saveContact(cardId, values, [...editedFieldsRef.current]);
@@ -167,10 +172,6 @@ export function CardReviewBody({ cardId, failed, confirmLabel, onConfirmed, onPr
     }
   };
 
-  const rotatePreview = () => {
-    const next = (previewRotation + 90) % 360;
-    setPreviewRotation(next); onPreviewRotation(next);
-  };
   const commitOrientation = async () => {
     if (!detail || previewRotation === 0) return;
     setBusy('向きを直して読み取っています…'); setErrorMessage('');
@@ -214,10 +215,11 @@ export function CardReviewBody({ cardId, failed, confirmLabel, onConfirmed, onPr
       <button type="button" className="button button--ghost" disabled={Boolean(busy)} onClick={handleReprocess}>
         もう一度読み取る
       </button>
-      <div className="orientation-actions">
-        <button type="button" className="button button--ghost" disabled={Boolean(busy)} onClick={rotatePreview}>画像を90°回転</button>
-        {previewRotation !== 0 && <button type="button" className="button button--ghost" disabled={Boolean(busy)} onClick={() => void commitOrientation()}>この向きで再認識</button>}
-      </div>
+      {previewRotation !== 0 && (
+        <button type="button" className="button button--ghost" disabled={Boolean(busy)} onClick={() => void commitOrientation()}>
+          この向きで再認識
+        </button>
+      )}
 
       <div className="action-bar">
         <button type="button" className="button button--primary" disabled={Boolean(busy)} onClick={handleConfirm}>
