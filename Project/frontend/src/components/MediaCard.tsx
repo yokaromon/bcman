@@ -5,6 +5,8 @@ type Props = {
   alt: string;
   title: string;
   meta: ReactNode;
+  /** 画像の隅に重ねる印。未登録の名刺を一覧の中で見つけるために使う。 */
+  badge?: ReactNode;
   onClick: () => void;
 };
 
@@ -13,11 +15,12 @@ type Props = {
  * 元画像が消えている古いデータでもサムネイルが 404 になるだけなので、
  * 画像の読み込み失敗は行ごと壊さずプレースホルダに差し替える。
  */
-export function MediaCard({ src, alt, title, meta, onClick }: Props) {
+export function MediaCard({ src, alt, title, meta, badge, onClick }: Props) {
   const [imageFailed, setImageFailed] = useState(false);
 
   return (
     <button type="button" className="media-card" onClick={onClick}>
+      {badge}
       {imageFailed ? (
         <span className="media-card__image media-card__image--missing">画像がありません</span>
       ) : (

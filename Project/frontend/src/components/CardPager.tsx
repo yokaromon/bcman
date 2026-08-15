@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type TouchEvent } from 'react';
 import { cardImageUrl, cardStatusLabel, deleteCard, isCardReady, type CardSummary } from '../api';
-import { CardReviewBody } from './CardReviewBody';
+import { CardReviewBody, type ReviewMode } from './CardReviewBody';
 import { ConfirmButton } from './ConfirmButton';
 
 /** 縦スクロールを横めくりと取り違えないための閾値。 */
@@ -14,12 +14,14 @@ type Props = {
   index: number;
   failedCardIds: Set<string>;
   confirmLabel: string;
+  mode?: ReviewMode;
   onIndexChange: (next: number) => void;
   onConfirmed: (cardId: string) => void;
   onDeleted?: (cardId: string) => void;
   onFinish?: () => void;
   onCandidates?: () => void;
   onUpdated?: () => void;
+  onDirtyChange?: (dirty: boolean) => void;
 };
 
 export function CardPager({
@@ -27,18 +29,23 @@ export function CardPager({
   index,
   failedCardIds,
   confirmLabel,
+  mode = 'review',
   onIndexChange,
   onConfirmed,
   onDeleted,
   onFinish,
   onCandidates,
   onUpdated,
+  onDirtyChange,
 }: Props) {
   const touchStart = useRef<{ x: number; y: number } | null>(null);
   const [errorMessage, setErrorMessage] = useState('');
   const [previewRotation, setPreviewRotation] = useState(0);
   const [imageRevision, setImageRevision] = useState('');
   const [busy, setBusy] = useState(false);
+  const [dirty, setDirty] = useState(false);
+  // 未保存のまま移動しようとした行き先。破棄を選ぶまで移動しない。
+  const [blockedIndex, setBlockedIndex] = useState<number | null>(null);
   const card = cards[index];
   const total = cards.length;
 
@@ -46,6 +53,15 @@ export function CardPager({
     setPreviewRotation(0);
     setImageRevision(card?.image_revision ?? '');
   }, [card?.id, card?.image_revision]);
+
+  useEffect(() => {
+    setBlockedIndex(null);
+  }, [index]);
+
+  const handleDirtyChange = (next: boolean) => {
+    setDirty(next);
+    onDirtyChange?.(next);
+  };
 
   const rotatePreview = () => {
     setPreviewRotation((current) => (current + 90) % 360);
@@ -56,7 +72,21 @@ export function CardPager({
     if (clamped === index) {
       return;
     }
+    // 台帳の修正は自動保存しない。黙って移動すると編集内容が消える
+    if (dirty) {
+      setBlockedIndex(clamped);
+      return;
+    }
     onIndexChange(clamped);
+  };
+
+  const discardAndGo = () => {
+    const target = blockedIndex;
+    setBlockedIndex(null);
+    handleDirtyChange(false);
+    if (target !== null) {
+      onIndexChange(target);
+    }
   };
 
   const handleTouchStart = (event: TouchEvent<HTMLDivElement>) => {
@@ -108,6 +138,7 @@ export function CardPager({
     <div className="screen screen--form">
       {/* 入力欄でのカーソル移動と競合しないよう、スワイプは画像の上だけで拾う */}
       <div className="card-image" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
+        {card.status !== 'confirmed' && <span className="card-image__badge">未登録</span>}
         <img key={`${card.id}-${imageRevision}`} className={previewRotation ? 'card-image__rotated' : ''} style={{ transform: `rotate(${previewRotation}deg)` }} src={cardImageUrl(card.id, imageRevision || card.image_revision)} alt={`名刺 ${index + 1} の画像`} />
         {total > 1 && <span className="card-image__hint">← 画像を左右にスワイプで切り替え →</span>}
       </div>
@@ -157,6 +188,20 @@ export function CardPager({
         </button>
       </div>
 
+      {blockedIndex !== null && (
+        <div className="alert alert--warn">
+          <p>未保存の変更があります。先に「保存」を押すか、変更を破棄してください。</p>
+          <div className="action-bar">
+            <button type="button" className="button button--ghost" onClick={discardAndGo}>
+              破棄して移動
+            </button>
+            <button type="button" className="button button--ghost" onClick={() => setBlockedIndex(null)}>
+              編集を続ける
+            </button>
+          </div>
+        </div>
+      )}
+
       {showForm ? (
         <CardReviewBody
           key={card.id}
@@ -164,11 +209,13 @@ export function CardPager({
           failed={failed}
           confirmLabel={confirmLabel}
           previewRotation={previewRotation}
+          mode={mode}
           onConfirmed={onConfirmed}
           onRotationChange={setPreviewRotation}
           onImageRevision={setImageRevision}
           onOrientationCommitted={onUpdated}
           onBusyChange={setBusy}
+          onDirtyChange={handleDirtyChange}
         />
       ) : (
         <div className="waiting">

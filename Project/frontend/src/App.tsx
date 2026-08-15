@@ -3,11 +3,11 @@ import { fetchMe, logout, type Me } from './api';
 import { CaptureFlow } from './CaptureFlow';
 import { AdminScreen } from './components/AdminScreen';
 import { DirectoryScreen } from './components/directory/DirectoryScreen';
-import { HistoryScreen } from './components/HistoryScreen';
 import { InstallAppButton } from './components/InstallAppButton';
+import { LEDGER_TAB_LABEL, LedgerScreen } from './components/ledger/LedgerScreen';
 import { LoginScreen } from './components/LoginScreen';
 
-type Tab = 'capture' | 'history' | 'directory' | 'admin';
+type Tab = 'capture' | 'ledger' | 'directory' | 'admin';
 
 export function App() {
   const [me, setMe] = useState<Me | null>(null);
@@ -74,7 +74,7 @@ export function App() {
 
       <main className="app__main">
         {tab === 'capture' && <CaptureFlow key={openCount} user={me} />}
-        {tab === 'history' && <HistoryScreen key={openCount} user={me} />}
+        {tab === 'ledger' && <LedgerScreen key={openCount} user={me} />}
         {tab === 'directory' && <DirectoryScreen key={openCount} user={me} />}
         {tab === 'admin' && me.role === 'admin' && <AdminScreen key={openCount} user={me} />}
       </main>
@@ -90,11 +90,11 @@ export function App() {
         </button>
         <button
           type="button"
-          className={tab === 'history' ? 'tabbar__item tabbar__item--active' : 'tabbar__item'}
-          onClick={() => openTab('history')}
+          className={tab === 'ledger' ? 'tabbar__item tabbar__item--active' : 'tabbar__item'}
+          onClick={() => openTab('ledger')}
         >
           <span aria-hidden="true">🗂</span>
-          履歴
+          {LEDGER_TAB_LABEL}
         </button>
         <button
           type="button"

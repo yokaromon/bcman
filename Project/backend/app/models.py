@@ -131,6 +131,9 @@ class Contact(Base):
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     review_flags: Mapped[dict] = mapped_column(JSON, default=dict)
     confirmed: Mapped[bool] = mapped_column(Boolean, default=False)
+    # 台帳検索用に全項目を正規化して連結したもの。表記ゆれを吸収した一致を SQL 側で
+    # 済ませるための派生値で、真実は各項目の側にある（app/contact_search.py 参照）
+    search_text: Mapped[str] = mapped_column(Text, default="")
     # 登録者(Card Owner)・名刺交換日(Exchanged At)。confirm()/confirm_cards()で確定時に既定値が入る。
     # docs/CONTEXT.md 参照
     card_owner_user_id: Mapped[str | None] = mapped_column(ForeignKey("users.id"), nullable=True)

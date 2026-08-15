@@ -282,6 +282,70 @@ export function deleteCard(cardId: string): Promise<{ deleted: boolean }> {
   return request<{ deleted: boolean }>(`/cards/${cardId}`, { method: 'DELETE' });
 }
 
+// --- 台帳（登録済み名刺の検索） ---
+
+/** 1ページの件数。増やすほど初回表示は重くなる。 */
+export const LEDGER_PAGE_SIZE = 50;
+/** 入力が止まってから検索するまでの待ち時間(ms)。 */
+export const LEDGER_SEARCH_DEBOUNCE_MS = 300;
+
+export type LedgerEntry = {
+  contact_id: string;
+  card_id: string;
+  status: CardStatus;
+  image_revision: string;
+  person_name: string | null;
+  company_name: string | null;
+  department: string | null;
+  position: string | null;
+  exchanged_at: string | null;
+  card_owner: { id: string; name: string | null } | null;
+};
+
+export type LedgerPage = { total: number; items: LedgerEntry[] };
+
+export function searchContacts(query: string, offset = 0, limit = LEDGER_PAGE_SIZE): Promise<LedgerPage> {
+  const params = new URLSearchParams({ q: query, offset: String(offset), limit: String(limit) });
+  return request<LedgerPage>(`/contacts?${params}`);
+}
+
+/** 検索結果を CardPager が扱う形にする。位置情報は台帳では使わないので持たない。 */
+export function ledgerEntryToCard(entry: LedgerEntry): CardSummary {
+  return {
+    id: entry.card_id,
+    status: entry.status,
+    confidence: 0,
+    image_revision: entry.image_revision,
+    bounding_box: { x: 0, y: 0, width: 0, height: 0 },
+  };
+}
+
+// --- 名刺画像の撮り直し。採用するまで既存の画像は変わらない ---
+
+export type ReplacementDraft = { token: string; detected: boolean };
+
+export async function startCardReplacement(cardId: string, file: File): Promise<ReplacementDraft> {
+  const body = new FormData();
+  body.append('file', file);
+  return request<ReplacementDraft>(`/cards/${cardId}/replacement`, { method: 'POST', body });
+}
+
+export function cardReplacementPreviewUrl(cardId: string, token: string): string {
+  return `${API_BASE}/cards/${cardId}/replacement/${token}`;
+}
+
+export function cancelCardReplacement(cardId: string, token: string): Promise<{ discarded: boolean }> {
+  return request(`/cards/${cardId}/replacement/${token}`, { method: 'DELETE' });
+}
+
+export function applyCardReplacement(
+  cardId: string,
+  token: string,
+  reread: boolean,
+): Promise<{ status: CardStatus; image_revision: string }> {
+  return request(`/cards/${cardId}/replacement/${token}/apply`, jsonInit('POST', { reread }));
+}
+
 /** 確認画面に出せる状態か。これ以外は解析途中か失敗のいずれか。 */
 export function isCardReady(status: CardStatus): boolean {
   return status === 'review_required' || status === 'confirmed' || status === 'retry_required';

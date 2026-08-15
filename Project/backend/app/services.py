@@ -1,4 +1,4 @@
-import asyncio, base64, json, re, shutil
+import asyncio, base64, json, re, shutil, time, uuid
 from io import BytesIO
 from pathlib import Path
 import cv2
@@ -8,6 +8,7 @@ from PIL import Image, ImageOps
 from sqlalchemy.orm import Session
 from .models import BusinessCard, Contact, Organization, OCRResult, Photo, ProcessingHistory, User, UserGroup
 from .schemas import CONTACT_FIELDS
+from .search_text import refresh_search_text
 from .settings import settings
 
 OCR_PROMPT = "画像内の文字をすべて正確に書き起こしてください。説明や前置きは不要で、本文のみを出力してください。"
@@ -141,18 +142,23 @@ def _ordered_corners(corners):
     top_left = int(np.argmin(clockwise.sum(axis=1)))
     return np.float32(np.roll(clockwise, -top_left, axis=0))
 
+def _perspective_corrected(image, corners):
+    """四隅から台形補正した画像を返す。出力サイズは対辺の長い方を使うため、
+    斜めの名刺でも文字を潰さない。"""
+    points = _ordered_corners(corners)
+    widths = [np.linalg.norm(points[1]-points[0]), np.linalg.norm(points[2]-points[3])]
+    heights = [np.linalg.norm(points[3]-points[0]), np.linalg.norm(points[2]-points[1])]
+    out_w, out_h = max(1, round(max(widths))), max(1, round(max(heights)))
+    transform = cv2.getPerspectiveTransform(points, np.float32([[0,0],[out_w-1,0],[out_w-1,out_h-1],[0,out_h-1]]))
+    return cv2.warpPerspective(image, transform, (out_w, out_h))
+
 def _write_card(photo: Photo, db: Session, image, corners, confidence=.75):
     points = _ordered_corners(corners)
     x, y, w, h = cv2.boundingRect(points.astype(np.int32))
     card = BusinessCard(photo_id=photo.id, detected_image_path="", corrected_image_path="", detection_confidence=confidence, x=x, y=y, width=w, height=h)
     db.add(card); db.flush()
     target = settings.storage_dir / "photos" / photo.id / "cards" / card.id; target.mkdir(parents=True, exist_ok=True)
-    # 四隅から台形補正する。出力サイズは対辺の長い方を使うため、斜めの名刺でも文字を潰さない。
-    widths = [np.linalg.norm(points[1]-points[0]), np.linalg.norm(points[2]-points[3])]
-    heights = [np.linalg.norm(points[3]-points[0]), np.linalg.norm(points[2]-points[1])]
-    out_w, out_h = max(1, round(max(widths))), max(1, round(max(heights)))
-    transform = cv2.getPerspectiveTransform(points, np.float32([[0,0],[out_w-1,0],[out_w-1,out_h-1],[0,out_h-1]]))
-    corrected_image = cv2.warpPerspective(image, transform, (out_w, out_h))
+    corrected_image = _perspective_corrected(image, corners)
     detected = target / "detected.jpg"; corrected = target / "corrected.jpg"; oriented = target / "oriented-0.jpg"
     cv2.imwrite(str(detected), image[max(0,y):max(0,y)+h, max(0,x):max(0,x)+w]); cv2.imwrite(str(corrected), corrected_image); cv2.imwrite(str(oriented), corrected_image)
     card.detected_image_path, card.corrected_image_path, card.oriented_image_path, card.orientation, card.status = str(detected), str(corrected), str(oriented), 0, "corrected"
@@ -244,6 +250,67 @@ def add_manual_card(photo: Photo, db: Session, corners):
     if any(x < 0 or y < 0 or x >= width or y >= height for x, y in corners): raise ValueError("四隅は写真の範囲内で指定してください")
     card = _write_card(photo, db, image, corners, 1.0); db.commit(); return card
 
+# --- 名刺画像の差し替え（撮り直し）。docs/adr/0013 参照 ---
+
+# 採用されずに放置された下見画像を、次の撮り直しのついでに掃除するまでの猶予。
+PENDING_REPLACEMENT_MAX_AGE_SECONDS = 60 * 60
+
+def _card_dir(card: BusinessCard) -> Path:
+    return Path(card.corrected_image_path).parent
+
+def pending_replacement_path(card: BusinessCard, token: str) -> Path:
+    return _card_dir(card) / "pending" / f"{token}.jpg"
+
+def _sweep_pending(directory: Path) -> None:
+    if not directory.exists(): return
+    for stale in directory.iterdir():
+        try:
+            if time.time() - stale.stat().st_mtime > PENDING_REPLACEMENT_MAX_AGE_SECONDS: stale.unlink()
+        except OSError:
+            continue  # 掃除は最善努力。消せなくても撮り直し自体は続行できる
+
+def prepare_replacement(card: BusinessCard, upload: Path) -> tuple[str, bool]:
+    """撮り直した写真から名刺を切り出し、採否を決めるまでの下見画像として保存する。
+    採用されるまで既存の画像には一切触らない。(token, 輪郭を検出できたか) を返す。"""
+    image = cv2.imread(str(upload))
+    if image is None: raise ValueError("画像を読み込めません")
+    quads = card_quads(image)
+    detected = bool(quads)
+    if detected:
+        corners = quads[0]
+    else:
+        # 1枚だけを画面いっぱいに撮ると外形が画面端に接して輪郭にならない。
+        # detect_cards と同じく、写真全体を1枚として扱う。
+        height, width = image.shape[:2]
+        corners = [[0, 0], [width - 1, 0], [width - 1, height - 1], [0, height - 1]]
+
+    pending_dir = _card_dir(card) / "pending"
+    _sweep_pending(pending_dir)
+    pending_dir.mkdir(parents=True, exist_ok=True)
+    token = uuid.uuid4().hex
+    cv2.imwrite(str(pending_dir / f"{token}.jpg"), _perspective_corrected(image, corners))
+    return token, detected
+
+def discard_replacement(card: BusinessCard, token: str) -> None:
+    pending_replacement_path(card, token).unlink(missing_ok=True)
+
+def apply_replacement(card: BusinessCard, db: Session, token: str) -> None:
+    """下見画像を正式な名刺画像として確定する。撮影原本から切り出した detected.jpg と
+    写真内の位置(x/y/width/height)は、元の Photo についての事実なのでそのまま残す。
+    置き換わるのは補正画像から先だけ。向きは撮り直した向きを基準に 0 へ戻す。"""
+    pending = pending_replacement_path(card, token)
+    if not pending.exists(): raise ValueError("撮り直した画像が見つかりません。もう一度撮影してください")
+    directory = _card_dir(card)
+    # 旧世代は残さない（撮り直しは不可逆）。派生サムネイルも道連れにしないと古い向きが残る
+    for stale in list(directory.glob("oriented-*.jpg")) + list(directory.glob("thumb-*.jpg")):
+        stale.unlink(missing_ok=True)
+    corrected, oriented = directory / "corrected.jpg", directory / "oriented-0.jpg"
+    shutil.copyfile(pending, corrected); shutil.copyfile(pending, oriented)
+    pending.unlink(missing_ok=True)
+    card.corrected_image_path, card.oriented_image_path, card.orientation = str(corrected), str(oriented), 0
+    db.add(ProcessingHistory(card_id=card.id, process_type="image_replacement", engine="user", version="", input_json={"token": token}, output_json={"image_path": str(corrected)}))
+    db.commit()
+
 async def chat(messages):
     if not settings.ai_api_key or not settings.ai_model: raise ValueError("AI_API_KEY と AI_MODEL を .env に設定してください")
     async with httpx.AsyncClient(timeout=90) as client:
@@ -290,6 +357,7 @@ async def structure(card: BusinessCard, db: Session):
     contact = db.query(Contact).filter_by(card_id=card.id).first() or Contact(card_id=card.id)
     for key, value in values.items(): setattr(contact, key, value)
     contact.review_flags = review_flags(values)
+    refresh_search_text(contact)
     db.add(contact); db.add(ProcessingHistory(card_id=card.id, process_type="llm", engine="ykr-multimodal", version=settings.ai_model, input_json={"raw_text":result.raw_text}, output_json=response))
     card.status = "review_required"; db.commit()
 
@@ -332,3 +400,9 @@ def visible_photo_query(db: Session, user: User):
     org = db.get(Organization, user.organization_id)
     if user.role == "admin" or org.sharing_mode == "shared": return query
     return query.filter(Photo.group_id.in_(user_group_ids(db, user)))
+
+def visible_contact_query(db: Session, user: User):
+    """可視範囲を Photo から Contact まで伸ばす。名刺は必ず写真に属するので、
+    連絡先の見える範囲は写真の見える範囲と一致する。"""
+    photo_id_subquery = visible_photo_query(db, user).with_entities(Photo.id).scalar_subquery()
+    return db.query(Contact).join(BusinessCard, BusinessCard.id == Contact.card_id).filter(BusinessCard.photo_id.in_(photo_id_subquery))

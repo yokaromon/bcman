@@ -1,19 +1,14 @@
 import re
-import unicodedata
 from urllib.parse import urlparse
 from sqlalchemy.orm import Session
-from ..models import BusinessCard, Contact, Photo, User, now
-from ..services import visible_photo_query
+from ..models import Contact, User, now
+from ..normalize import normalize_text as _normalize_text
+from ..services import visible_contact_query
 from .models import Company, CompanyContact, MergeCandidate, Person, PersonContact
 
 # --- 正規化。「かな正規化一致」「websiteドメイン一致」の基準（docs/directory/CONTEXT.md 参照） ---
 
 COMPANY_SUFFIXES = re.compile(r"(株式会社|有限会社|合同会社|一般社団法人|公益社団法人|Co\.,?\s*Ltd\.?|Inc\.?|Corporation|Corp\.?)")
-
-def _normalize_text(value: str | None) -> str:
-    if not value: return ""
-    text = unicodedata.normalize("NFKC", value)
-    return re.sub(r"\s+", "", text).lower()
 
 def normalize_person_key(person_name: str | None, company_name: str | None) -> str:
     return _normalize_text(person_name) + "|" + _normalize_text(company_name)
@@ -27,12 +22,6 @@ def website_domain(website: str | None) -> str:
     candidate = website if "//" in website else f"//{website}"
     host = (urlparse(candidate).netloc or "").lower()
     return host[4:] if host.startswith("www.") else host
-
-# --- 可視範囲。visible_photo_query(Organization/Group/Sharing Mode)をContact経由に伸ばす ---
-
-def visible_contact_query(db: Session, user: User):
-    photo_id_subquery = visible_photo_query(db, user).with_entities(Photo.id).subquery()
-    return db.query(Contact).join(BusinessCard, BusinessCard.id == Contact.card_id).filter(BusinessCard.photo_id.in_(photo_id_subquery))
 
 def _person_id_for_contact(db: Session, contact_id: str) -> str | None:
     row = db.query(PersonContact).filter_by(contact_id=contact_id).first()
@@ -57,9 +46,17 @@ def register_confirmed_contact(contact_id: str, user: User, db: Session) -> None
         _suggest_company_candidates(contact, user, db)
     db.flush()
 
+def _pending_targets(db: Session, kind: str, contact_id: str) -> set[str]:
+    """この Contact について既に保留中の統合候補が指している相手。
+    編集による再照合で、同じ相手をもう一度候補に積まないために使う。"""
+    rows = db.query(MergeCandidate).filter_by(kind=kind, contact_id=contact_id, status="pending")
+    return {(row.target_person_id if kind == "person" else row.target_company_id) for row in rows}
+
 def _suggest_person_candidates(contact: Contact, user: User, db: Session) -> None:
     visible = visible_contact_query(db, user).filter(Contact.id != contact.id)
-    matched_person_ids: set[str] = set()
+    # 自分がいま属するPersonは統合先になり得ない。登録直後は自分ひとりなので効かないが、
+    # 編集による再照合では、既に統合済みの相手を自分自身へ統合する候補が出てしまう。
+    matched_person_ids: set[str] = {_person_id_for_contact(db, contact.id)} | _pending_targets(db, "person", contact.id)
     if _normalize_text(contact.email):
         for other in visible.filter(Contact.email == contact.email):
             target_person_id = _person_id_for_contact(db, other.id)
@@ -77,7 +74,7 @@ def _suggest_person_candidates(contact: Contact, user: User, db: Session) -> Non
 
 def _suggest_company_candidates(contact: Contact, user: User, db: Session) -> None:
     visible = visible_contact_query(db, user).filter(Contact.id != contact.id)
-    matched_company_ids: set[str] = set()
+    matched_company_ids: set[str] = {_company_id_for_contact(db, contact.id)} | _pending_targets(db, "company", contact.id)
     domain = website_domain(contact.website)
     if domain:
         for other in visible:
@@ -87,12 +84,34 @@ def _suggest_company_candidates(contact: Contact, user: User, db: Session) -> No
                 matched_company_ids.add(target_company_id)
                 db.add(MergeCandidate(kind="company", contact_id=contact.id, target_company_id=target_company_id, signal="website_domain"))
     key = normalize_company_key(contact.company_name)
+    # 会社名が接尾辞だけ（"株式会社" 等）だと key が空になる。空同士を一致とみなすと
+    # 会社名を持たない Contact 全部が候補になるので、ここで打ち切る。
+    if not key: return
     for other in visible:
         if normalize_company_key(other.company_name) != key: continue
         target_company_id = _company_id_for_contact(db, other.id)
         if target_company_id and target_company_id not in matched_company_ids:
             matched_company_ids.add(target_company_id)
             db.add(MergeCandidate(kind="company", contact_id=contact.id, target_company_id=target_company_id, signal="company_kana"))
+
+# --- Confirmed Contact編集時のフック ---
+
+# この項目が変わったときだけ照合をやり直す（docs/directory/CONTEXT.md の Merge Candidate 参照）
+REMATCH_FIELDS = ("email", "person_name", "company_name", "website")
+
+def rematch_contact(contact: Contact, changed_fields: set[str], user: User, db: Session) -> None:
+    """登録済み Contact の照合フィールドが変わったとき、統合候補を作り直す。
+    既存の Person / Company 所属は動かさない。統合はあくまで人が承認するもので、
+    所属の付け替えは split で行う。"""
+    if not contact.confirmed or not changed_fields & set(REMATCH_FIELDS): return
+    _suggest_person_candidates(contact, user, db)
+    # 会社名が空から埋まった場合、この Contact にはまだ Company が無い
+    if not _company_id_for_contact(db, contact.id):
+        if not _normalize_text(contact.company_name): return
+        company = Company(organization_id=user.organization_id); db.add(company); db.flush()
+        db.add(CompanyContact(company_id=company.id, contact_id=contact.id))
+    _suggest_company_candidates(contact, user, db)
+    db.flush()
 
 # --- 統合・Split ---
 
