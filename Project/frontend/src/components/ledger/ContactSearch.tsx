@@ -65,6 +65,9 @@ export function ContactSearch() {
 
   const closeDetail = () => {
     setOpenIndex(-1);
+    // 詳細を閉じると CardReviewBody は消えるので、未保存フラグを下ろす相手がいない。
+    // 残したままだと次に開いた直後の「戻る」が誤って止められる。
+    setDirty(false);
     if (staleRef.current) {
       staleRef.current = false;
       void load(query, 0);
