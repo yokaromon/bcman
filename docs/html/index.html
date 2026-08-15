@@ -1,611 +1,1249 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ja">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BCMan - 名刺管理システム ドキュメント</title>
-    <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif; line-height: 1.6; color: #333; background: #f5f7fa; }
-        .container { max-width: 1200px; margin: 0 auto; padding: 24px; }
-        header { background: linear-gradient(135deg, #1a56ce 0%, #1368ce 100%); color: white; padding: 32px; border-radius: 12px; margin-bottom: 32px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        header h1 { font-size: 2.5rem; margin-bottom: 8px; }
-        header p { font-size: 1.1rem; opacity: 0.9; }
-        nav { background: white; border-radius: 8px; padding: 16px; margin-bottom: 32px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-        nav ul { display: flex; flex-wrap: wrap; list-style: none; gap: 20px; }
-        nav a { color: #1a56ce; text-decoration: none; font-weight: 500; padding: 8px 16px; border-radius: 6px; transition: background 0.2s; }
-        nav a:hover { background: #eef2f8; }
-        section { background: white; border-radius: 12px; padding: 32px; margin-bottom: 32px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-        h2 { color: #1a56ce; font-size: 1.75rem; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 2px solid #eef2f8; }
-        h3 { color: #2c3e50; font-size: 1.25rem; margin: 20px 0 12px; }
-        h4 { color: #4a6fa5; font-size: 1.1rem; margin: 16px 0 8px; }
-        p { margin-bottom: 16px; }
-        ul { margin: 12px 0 16px 24px; }
-        li { margin-bottom: 8px; }
-        .highlight { background: #eef2f8; padding: 16px; border-radius: 8px; border-left: 4px solid #1a56ce; }
-        .warning { background: #fff3cd; padding: 16px; border-radius: 8px; border-left: 4px solid #ffc107; color: #856404; }
-        .code-block { background: #1e1e1e; color: #d4d4d4; padding: 16px; border-radius: 8px; overflow-x: auto; font-family: 'Consolas', 'Monaco', monospace; font-size: 0.9rem; margin: 12px 0; }
-        .api-table { width: 100%; border-collapse: collapse; margin: 16px 0; }
-        .api-table th, .api-table td { padding: 12px; text-align: left; border-bottom: 1px solid #eef2f8; }
-        .api-table th { background: #eef2f8; font-weight: 600; }
-        .api-table .method-get { color: #4caf50; font-weight: bold; }
-        .api-table .method-post { color: #2196f3; font-weight: bold; }
-        .api-table .method-put { color: #ff9800; font-weight: bold; }
-        .api-table .method-delete { color: #c62828; font-weight: bold; }
-        .status-badge { display: inline-block; padding: 4px 12px; border-radius: 12px; font-size: 0.8rem; font-weight: 600; }
-        .status-uploaded { background: #e3f2fd; color: #1976d2; }
-        .status-completed { background: #e8f5e9; color: #388e3c; }
-        .status-failed { background: #ffebee; color: #c62828; }
-        .architecture-diagram { background: #f8f9fa; padding: 24px; border-radius: 8px; text-align: center; margin: 16px 0; }
-        .diagram-box { display: inline-block; background: white; border: 2px solid #1a56ce; color: #1a56ce; padding: 12px 24px; border-radius: 8px; margin: 8px; font-weight: 600; }
-        .diagram-arrow { color: #1a56ce; font-size: 1.5rem; }
-        .data-table { width: 100%; border-collapse: collapse; margin: 16px 0; }
-        .data-table th, .data-table td { padding: 12px; text-align: left; border-bottom: 1px solid #eef2f8; }
-        .data-table th { background: #eef2f8; font-weight: 600; }
-        .data-table td { font-family: monospace; }
-        .env-table th, .env-table td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #eef2f8; }
-        .env-table th { background: #f5f5f5; font-weight: 600; width: 200px; }
-        .features-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 16px; margin: 16px 0; }
-        .feature-card { background: #f8f9fa; border: 1px solid #eef2f8; border-radius: 8px; padding: 16px; }
-        .feature-card h4 { margin: 0 0 8px; color: #1a56ce; }
-        .feature-card p { margin: 0; font-size: 0.9rem; color: #666; }
-        footer { text-align: center; padding: 32px; color: #666; font-size: 0.9rem; }
-    </style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="BCMan（名刺管理PoC）の目的、利用フロー、機能、アーキテクチャ、データと運用方針をまとめたプロジェクト概要。">
+  <title>BCMan | プロジェクト概要</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #182722;
+      --muted: #62706a;
+      --paper: #f6f4ed;
+      --surface: #fffdf8;
+      --surface-2: #edf3ef;
+      --line: #d8ded9;
+      --forest: #173f35;
+      --forest-2: #0e2e27;
+      --mint: #b9f3d2;
+      --mint-strong: #5fc895;
+      --coral: #f17b5c;
+      --amber: #f4c96a;
+      --blue: #76aee8;
+      --shadow: 0 20px 50px rgba(23, 63, 53, .10);
+      --radius-lg: 28px;
+      --radius-md: 18px;
+      --radius-sm: 12px;
+      --content: 1160px;
+    }
+
+    * { box-sizing: border-box; }
+
+    html {
+      scroll-behavior: smooth;
+      scroll-padding-top: 84px;
+    }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 8% 1%, rgba(185, 243, 210, .48), transparent 28rem),
+        radial-gradient(circle at 92% 22%, rgba(244, 201, 106, .18), transparent 24rem),
+        var(--paper);
+      font-family: "Yu Gothic UI", "Hiragino Sans", "Noto Sans JP", Meiryo, sans-serif;
+      font-size: 16px;
+      line-height: 1.75;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    a { color: inherit; }
+    img, svg { display: block; max-width: 100%; }
+    button, input { font: inherit; }
+    code, pre { font-family: Consolas, "SFMono-Regular", Menlo, monospace; }
+
+    .skip-link {
+      position: fixed;
+      z-index: 100;
+      top: 12px;
+      left: 12px;
+      padding: 8px 12px;
+      color: white;
+      background: var(--forest-2);
+      border-radius: 8px;
+      transform: translateY(-160%);
+    }
+
+    .skip-link:focus { transform: translateY(0); }
+
+    .site-header {
+      position: sticky;
+      z-index: 50;
+      top: 0;
+      border-bottom: 1px solid rgba(23, 63, 53, .10);
+      background: rgba(246, 244, 237, .88);
+      backdrop-filter: blur(16px);
+    }
+
+    .nav {
+      width: min(calc(100% - 40px), var(--content));
+      min-height: 68px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 28px;
+    }
+
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--forest-2);
+      font-weight: 800;
+      letter-spacing: -.02em;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+
+    .brand-mark {
+      width: 34px;
+      height: 34px;
+      display: grid;
+      place-items: center;
+      color: var(--mint);
+      background: var(--forest);
+      border-radius: 10px;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.12);
+    }
+
+    .brand-mark svg { width: 20px; }
+
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      color: #405049;
+      font-size: .86rem;
+      font-weight: 700;
+    }
+
+    .nav-links a {
+      text-decoration: none;
+      transition: color .2s ease;
+    }
+
+    .nav-links a:hover { color: var(--coral); }
+
+    main { overflow: hidden; }
+
+    .container {
+      width: min(calc(100% - 40px), var(--content));
+      margin-inline: auto;
+    }
+
+    .hero {
+      position: relative;
+      min-height: 700px;
+      display: grid;
+      align-items: center;
+      padding: 78px 0 88px;
+    }
+
+    .hero::after {
+      content: "";
+      position: absolute;
+      right: -8%;
+      bottom: 2%;
+      width: 30vw;
+      height: 30vw;
+      min-width: 260px;
+      min-height: 260px;
+      border: 1px solid rgba(23, 63, 53, .08);
+      border-radius: 50%;
+      pointer-events: none;
+    }
+
+    .hero-grid {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      grid-template-columns: minmax(0, 1.1fr) minmax(360px, .9fr);
+      align-items: center;
+      gap: clamp(44px, 8vw, 112px);
+    }
+
+    .eyebrow {
+      margin: 0 0 18px;
+      color: #367558;
+      font-size: .78rem;
+      font-weight: 800;
+      letter-spacing: .16em;
+      text-transform: uppercase;
+    }
+
+    h1, h2, h3, p { margin-top: 0; }
+
+    h1 {
+      max-width: 760px;
+      margin-bottom: 24px;
+      color: var(--forest-2);
+      font-size: clamp(3.25rem, 7vw, 6.4rem);
+      line-height: .96;
+      letter-spacing: -.075em;
+    }
+
+    .hero-title-jp {
+      display: block;
+      margin-top: 17px;
+      font-size: clamp(1.25rem, 2.2vw, 2rem);
+      line-height: 1.4;
+      letter-spacing: -.035em;
+    }
+
+    .hero-copy {
+      max-width: 640px;
+      margin-bottom: 30px;
+      color: #4f5f58;
+      font-size: clamp(1rem, 1.7vw, 1.2rem);
+    }
+
+    .hero-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .button {
+      min-height: 48px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 11px 18px;
+      border: 1px solid var(--forest);
+      border-radius: 999px;
+      font-weight: 800;
+      text-decoration: none;
+      transition: transform .2s ease, box-shadow .2s ease, background .2s ease;
+    }
+
+    .button:hover { transform: translateY(-2px); }
+    .button--primary { color: white; background: var(--forest); box-shadow: 0 10px 25px rgba(23, 63, 53, .18); }
+    .button--ghost { color: var(--forest); background: transparent; }
+
+    .phone-wrap { position: relative; display: grid; place-items: center; }
+
+    .phone-wrap::before {
+      content: "";
+      position: absolute;
+      width: min(94%, 430px);
+      aspect-ratio: 1;
+      background: var(--mint);
+      border-radius: 46% 54% 62% 38% / 42% 42% 58% 58%;
+      transform: rotate(-8deg);
+    }
+
+    .phone {
+      position: relative;
+      width: min(320px, 80vw);
+      padding: 13px;
+      background: #101a17;
+      border: 1px solid rgba(255,255,255,.45);
+      border-radius: 38px;
+      box-shadow: 0 34px 70px rgba(14, 46, 39, .28);
+      transform: rotate(3deg);
+    }
+
+    .phone-screen {
+      min-height: 570px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      background: #f9f8f3;
+      border-radius: 28px;
+    }
+
+    .phone-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 17px 18px 13px;
+      color: var(--forest);
+      font-size: .72rem;
+      font-weight: 800;
+      border-bottom: 1px solid #e6e8e2;
+    }
+
+    .phone-content { flex: 1; padding: 22px 20px; }
+
+    .mini-label {
+      display: inline-block;
+      margin-bottom: 12px;
+      padding: 4px 9px;
+      color: #2e6c50;
+      background: #dcf6e7;
+      border-radius: 999px;
+      font-size: .62rem;
+      font-weight: 800;
+    }
+
+    .phone-content h2 { margin-bottom: 7px; font-size: 1.35rem; line-height: 1.35; }
+    .phone-content > p { color: #6b756f; font-size: .76rem; line-height: 1.6; }
+
+    .card-preview {
+      position: relative;
+      aspect-ratio: 1.72;
+      margin: 18px 0;
+      overflow: hidden;
+      color: white;
+      background:
+        linear-gradient(125deg, rgba(255,255,255,.14), transparent 45%),
+        var(--forest);
+      border-radius: 13px;
+      box-shadow: 0 12px 25px rgba(23,63,53,.18);
+    }
+
+    .card-preview::before {
+      content: "BC";
+      position: absolute;
+      top: 18px;
+      left: 18px;
+      display: grid;
+      width: 38px;
+      height: 38px;
+      place-items: center;
+      color: var(--forest);
+      background: var(--mint);
+      border-radius: 50%;
+      font-size: .72rem;
+      font-weight: 900;
+    }
+
+    .card-preview::after {
+      content: "AOYAGI TARO\A Product Planning\A\A bcman@example.jp";
+      position: absolute;
+      right: 19px;
+      bottom: 16px;
+      white-space: pre;
+      font-family: Consolas, monospace;
+      font-size: .58rem;
+      line-height: 1.45;
+      text-align: right;
+      opacity: .9;
+    }
+
+    .field-line { margin-top: 11px; }
+    .field-line span { display: block; margin-bottom: 4px; color: #6a756f; font-size: .62rem; font-weight: 700; }
+    .field-value { height: 30px; padding: 6px 9px; background: white; border: 1px solid #dfe3dd; border-radius: 7px; font-size: .68rem; }
+
+    .confirm-mini {
+      margin-top: 17px;
+      padding: 9px;
+      color: white;
+      background: var(--forest);
+      border-radius: 999px;
+      font-size: .69rem;
+      font-weight: 800;
+      text-align: center;
+    }
+
+    .phone-tabs {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      padding: 10px 7px 13px;
+      color: #7c8781;
+      background: white;
+      border-top: 1px solid #e7e8e3;
+      font-size: .55rem;
+      font-weight: 700;
+      text-align: center;
+    }
+
+    .phone-tabs span:first-child { color: var(--forest); }
+
+    .fact-strip {
+      position: relative;
+      z-index: 2;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      margin-top: -34px;
+      overflow: hidden;
+      color: white;
+      background: var(--forest-2);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow);
+    }
+
+    .fact {
+      min-height: 120px;
+      padding: 24px 28px;
+      border-right: 1px solid rgba(255,255,255,.12);
+    }
+
+    .fact:last-child { border: 0; }
+    .fact strong { display: block; margin-bottom: 4px; color: var(--mint); font-size: 1.15rem; }
+    .fact span { color: rgba(255,255,255,.72); font-size: .84rem; }
+
+    .section { padding: 112px 0; }
+    .section--white { background: rgba(255,253,248,.84); }
+    .section--dark { color: white; background: var(--forest-2); }
+
+    .section-heading {
+      max-width: 740px;
+      margin-bottom: 48px;
+    }
+
+    .section-heading--split {
+      max-width: none;
+      display: grid;
+      grid-template-columns: .8fr 1.2fr;
+      align-items: end;
+      gap: 56px;
+    }
+
+    .section-heading .eyebrow { margin-bottom: 13px; }
+
+    h2 {
+      margin-bottom: 18px;
+      color: var(--forest-2);
+      font-size: clamp(2rem, 4vw, 3.4rem);
+      line-height: 1.2;
+      letter-spacing: -.055em;
+    }
+
+    .section--dark h2 { color: white; }
+    .section-heading p { margin-bottom: 0; color: var(--muted); font-size: 1.03rem; }
+    .section--dark .section-heading p { color: rgba(255,255,255,.66); }
+
+    .value-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 18px;
+    }
+
+    .value-card {
+      min-height: 290px;
+      padding: 30px;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-md);
+      box-shadow: 0 12px 30px rgba(31,56,47,.05);
+    }
+
+    .value-card:nth-child(2) { transform: translateY(18px); }
+    .value-card:nth-child(3) { transform: translateY(36px); }
+
+    .number {
+      display: inline-flex;
+      width: 44px;
+      height: 44px;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 38px;
+      color: var(--forest);
+      background: var(--mint);
+      border-radius: 50%;
+      font-family: Georgia, serif;
+      font-style: italic;
+      font-weight: 700;
+    }
+
+    h3 {
+      margin-bottom: 10px;
+      color: var(--forest-2);
+      font-size: 1.22rem;
+      line-height: 1.45;
+      letter-spacing: -.02em;
+    }
+
+    .value-card p, .feature-card p, .note-card p { margin-bottom: 0; color: var(--muted); font-size: .9rem; }
+
+    .flow {
+      position: relative;
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 12px;
+    }
+
+    .flow::before {
+      content: "";
+      position: absolute;
+      top: 31px;
+      right: 8%;
+      left: 8%;
+      height: 1px;
+      background: rgba(255,255,255,.2);
+    }
+
+    .flow-step { position: relative; z-index: 1; }
+
+    .flow-dot {
+      width: 63px;
+      height: 63px;
+      display: grid;
+      place-items: center;
+      margin-bottom: 22px;
+      color: var(--forest-2);
+      background: var(--mint);
+      border: 8px solid var(--forest-2);
+      border-radius: 50%;
+      font-weight: 900;
+    }
+
+    .flow-step h3 { color: white; font-size: 1rem; }
+    .flow-step p { margin: 0; color: rgba(255,255,255,.6); font-size: .78rem; line-height: 1.65; }
+
+    .flow-note {
+      margin-top: 48px;
+      padding: 22px 26px;
+      color: rgba(255,255,255,.8);
+      background: rgba(255,255,255,.06);
+      border: 1px solid rgba(255,255,255,.12);
+      border-radius: var(--radius-sm);
+      font-size: .88rem;
+    }
+
+    .flow-note strong { color: var(--amber); }
+
+    .feature-layout {
+      display: grid;
+      grid-template-columns: .78fr 1.22fr;
+      gap: 70px;
+      align-items: start;
+    }
+
+    .tabs-visual {
+      position: sticky;
+      top: 102px;
+      padding: 28px;
+      color: white;
+      background: var(--forest);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow);
+    }
+
+    .tabs-visual-header { margin-bottom: 30px; }
+    .tabs-visual-header small { color: var(--mint); font-weight: 800; letter-spacing: .1em; }
+    .tabs-visual-header h3 { margin-top: 6px; color: white; font-size: 1.5rem; }
+
+    .tab-item {
+      display: grid;
+      grid-template-columns: 42px 1fr;
+      gap: 13px;
+      align-items: center;
+      padding: 15px 0;
+      border-top: 1px solid rgba(255,255,255,.12);
+    }
+
+    .tab-icon {
+      width: 38px;
+      height: 38px;
+      display: grid;
+      place-items: center;
+      color: var(--forest);
+      background: var(--mint);
+      border-radius: 12px;
+      font-size: .78rem;
+      font-weight: 900;
+    }
+
+    .tab-item strong { display: block; font-size: .93rem; }
+    .tab-item span:last-child { color: rgba(255,255,255,.62); font-size: .73rem; }
+
+    .feature-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+    .feature-card {
+      min-height: 220px;
+      padding: 26px;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-md);
+    }
+
+    .feature-card--wide { grid-column: 1 / -1; min-height: 0; }
+
+    .feature-kicker {
+      display: block;
+      margin-bottom: 18px;
+      color: #3d7a5b;
+      font-family: Consolas, monospace;
+      font-size: .72rem;
+      font-weight: 800;
+      letter-spacing: .08em;
+    }
+
+    .pill-row { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 18px; }
+
+    .pill {
+      padding: 5px 9px;
+      color: #496057;
+      background: var(--surface-2);
+      border: 1px solid #d6e1da;
+      border-radius: 999px;
+      font-size: .7rem;
+      font-weight: 700;
+    }
+
+    .architecture {
+      padding: 34px;
+      background: #f9faf7;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow);
+    }
+
+    .arch-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+    }
+
+    .arch-node {
+      min-height: 138px;
+      padding: 22px;
+      background: white;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+    }
+
+    .arch-node--primary { color: white; background: var(--forest); border-color: var(--forest); }
+    .arch-node--accent { background: #e2f7ea; border-color: #b7dfc7; }
+    .arch-node small { display: block; margin-bottom: 12px; color: #658076; font-family: Consolas, monospace; font-weight: 800; }
+    .arch-node--primary small { color: var(--mint); }
+    .arch-node strong { display: block; margin-bottom: 5px; }
+    .arch-node span { display: block; color: var(--muted); font-size: .75rem; line-height: 1.5; }
+    .arch-node--primary span { color: rgba(255,255,255,.68); }
+
+    .arch-connector {
+      position: relative;
+      height: 55px;
+    }
+
+    .arch-connector::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      bottom: 14px;
+      left: 50%;
+      width: 1px;
+      background: #9cac9f;
+    }
+
+    .arch-connector::after {
+      content: "";
+      position: absolute;
+      bottom: 10px;
+      left: calc(50% - 4px);
+      width: 7px;
+      height: 7px;
+      border-right: 1px solid #74867a;
+      border-bottom: 1px solid #74867a;
+      transform: rotate(45deg);
+    }
+
+    .arch-caption { margin: 20px 3px 0; color: var(--muted); font-size: .8rem; }
+
+    .model-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 18px;
+      align-items: stretch;
+    }
+
+    .model-card {
+      position: relative;
+      padding: 28px;
+      background: rgba(255,255,255,.055);
+      border: 1px solid rgba(255,255,255,.13);
+      border-radius: var(--radius-md);
+    }
+
+    .model-card::after {
+      content: "→";
+      position: absolute;
+      top: 43px;
+      right: -22px;
+      z-index: 2;
+      color: var(--mint);
+      font-size: 1.4rem;
+    }
+
+    .model-card:last-child::after { display: none; }
+    .model-card .model-index { color: var(--mint); font-family: Georgia, serif; font-style: italic; }
+    .model-card h3 { margin-top: 22px; color: white; }
+    .model-card p { color: rgba(255,255,255,.62); font-size: .84rem; }
+
+    .entity-list { margin: 18px 0 0; padding: 0; list-style: none; }
+    .entity-list li { padding: 7px 0; border-top: 1px solid rgba(255,255,255,.09); color: rgba(255,255,255,.82); font-size: .78rem; }
+
+    .rules-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+      margin-top: 54px;
+    }
+
+    .rule-card { padding: 25px; color: var(--ink); background: var(--surface); border-radius: var(--radius-md); }
+    .rule-card h3 { display: flex; align-items: center; gap: 10px; }
+    .rule-card p { margin: 0; color: var(--muted); font-size: .84rem; }
+    .rule-mark { width: 26px; height: 26px; display: inline-grid; place-items: center; color: var(--forest); background: var(--mint); border-radius: 50%; font-size: .7rem; }
+
+    .security-grid { display: grid; grid-template-columns: 1.05fr .95fr; gap: 30px; }
+
+    .scope-map {
+      padding: 32px;
+      color: white;
+      background: var(--forest);
+      border-radius: var(--radius-lg);
+    }
+
+    .scope-map h3 { color: white; }
+
+    .scope-layers {
+      margin-top: 25px;
+      padding: 16px;
+      border: 1px solid rgba(255,255,255,.25);
+      border-radius: 20px;
+    }
+
+    .scope-layer {
+      padding: 16px;
+      border: 1px solid rgba(255,255,255,.2);
+      border-radius: 14px;
+    }
+
+    .scope-layer + .scope-layer { margin-top: 10px; }
+    .scope-layer strong { color: var(--mint); font-size: .84rem; }
+    .scope-layer p { margin: 3px 0 0; color: rgba(255,255,255,.64); font-size: .74rem; }
+
+    .security-list { display: grid; gap: 14px; }
+
+    .security-item {
+      display: grid;
+      grid-template-columns: 44px 1fr;
+      gap: 15px;
+      padding: 20px;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+    }
+
+    .security-icon { width: 42px; height: 42px; display: grid; place-items: center; color: var(--forest); background: var(--mint); border-radius: 13px; font-weight: 900; }
+    .security-item h3 { margin-bottom: 5px; font-size: .98rem; }
+    .security-item p { margin: 0; color: var(--muted); font-size: .78rem; }
+
+    .retention {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      gap: 20px;
+      align-items: center;
+      margin-top: 30px;
+      padding: 24px 28px;
+      background: #fff8e8;
+      border: 1px solid #ead9af;
+      border-radius: var(--radius-md);
+    }
+
+    .retention strong { display: block; color: #57461f; }
+    .retention span { color: #7c6a42; font-size: .8rem; }
+    .retention-arrow { color: var(--coral); font-size: 1.6rem; font-weight: 900; }
+
+    .dev-grid { display: grid; grid-template-columns: .9fr 1.1fr; gap: 34px; align-items: start; }
+
+    .stack-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+    .stack-item { padding: 19px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-sm); }
+    .stack-item small { display: block; color: #3d7a5b; font-family: Consolas, monospace; font-weight: 800; }
+    .stack-item strong { display: block; margin-top: 6px; font-size: .9rem; }
+
+    .code-panel {
+      overflow: hidden;
+      background: #101b17;
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow);
+    }
+
+    .code-title {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 14px 18px;
+      color: rgba(255,255,255,.66);
+      background: rgba(255,255,255,.05);
+      border-bottom: 1px solid rgba(255,255,255,.08);
+      font-size: .75rem;
+    }
+
+    .code-dot { width: 9px; height: 9px; background: var(--coral); border-radius: 50%; }
+    .code-dot:nth-child(2) { background: var(--amber); }
+    .code-dot:nth-child(3) { background: var(--mint-strong); margin-right: 8px; }
+
+    pre {
+      margin: 0;
+      padding: 24px;
+      overflow: auto;
+      color: #d7ede0;
+      font-size: .79rem;
+      line-height: 1.75;
+      white-space: pre-wrap;
+    }
+
+    .caveat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 46px; }
+
+    .note-card { padding: 20px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-sm); }
+    .note-card strong { display: block; margin-bottom: 7px; color: var(--forest); font-size: .86rem; }
+    .note-card p { font-size: .75rem; }
+
+    .docs-links {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin-top: 30px;
+    }
+
+    .doc-link {
+      min-height: 112px;
+      padding: 18px;
+      color: var(--forest-2);
+      background: #eef5f0;
+      border: 1px solid #d2e1d7;
+      border-radius: var(--radius-sm);
+      text-decoration: none;
+      transition: transform .2s ease, border-color .2s ease;
+    }
+
+    .doc-link:hover { transform: translateY(-3px); border-color: var(--mint-strong); }
+    .doc-link small { display: block; margin-bottom: 7px; color: #608071; font-family: Consolas, monospace; }
+    .doc-link strong { font-size: .86rem; }
+
+    footer {
+      padding: 38px 0;
+      color: rgba(255,255,255,.62);
+      background: #0b211c;
+      font-size: .76rem;
+    }
+
+    .footer-inner { display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+    .footer-brand { color: white; font-size: 1rem; font-weight: 900; }
+
+    @media (max-width: 980px) {
+      .nav-links { display: none; }
+      .hero { min-height: auto; }
+      .hero-grid { grid-template-columns: 1fr; }
+      .hero-copy { max-width: 720px; }
+      .phone-wrap { margin-top: 20px; }
+      .section-heading--split { grid-template-columns: 1fr; gap: 8px; }
+      .value-grid, .model-grid { grid-template-columns: 1fr; }
+      .value-card:nth-child(n) { min-height: 0; transform: none; }
+      .model-card::after { content: "↓"; top: auto; right: 50%; bottom: -28px; }
+      .flow { grid-template-columns: 1fr 1fr; gap: 28px; }
+      .flow::before { display: none; }
+      .feature-layout, .security-grid, .dev-grid { grid-template-columns: 1fr; }
+      .tabs-visual { position: static; }
+      .caveat-grid, .docs-links { grid-template-columns: 1fr 1fr; }
+    }
+
+    @media (max-width: 640px) {
+      body { font-size: 15px; }
+      .container, .nav { width: min(calc(100% - 28px), var(--content)); }
+      .hero { padding: 58px 0 72px; }
+      h1 { font-size: clamp(3rem, 18vw, 4.8rem); }
+      .hero-title-jp { max-width: 95%; }
+      .fact-strip { grid-template-columns: 1fr; margin-top: -20px; }
+      .fact { min-height: 0; border-right: 0; border-bottom: 1px solid rgba(255,255,255,.12); }
+      .section { padding: 80px 0; }
+      .flow, .feature-grid, .arch-row, .rules-grid, .stack-grid, .caveat-grid, .docs-links { grid-template-columns: 1fr; }
+      .feature-card--wide { grid-column: auto; }
+      .architecture { padding: 20px; }
+      .retention { grid-template-columns: 1fr; }
+      .retention-arrow { transform: rotate(90deg); justify-self: center; }
+      .footer-inner { align-items: flex-start; flex-direction: column; }
+    }
+
+    @media print {
+      :root { --paper: white; --surface: white; }
+      body { background: white; font-size: 11pt; }
+      .site-header, .hero-actions { display: none; }
+      .hero, .section { padding: 32px 0; }
+      .hero { min-height: 0; }
+      .phone { box-shadow: none; }
+      .value-card, .architecture, .code-panel, .tabs-visual { box-shadow: none; break-inside: avoid; }
+      .tabs-visual { position: static; }
+      a { text-decoration: none; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      *, *::before, *::after { transition: none !important; }
+    }
+  </style>
 </head>
 <body>
-<div class="container">
-    <header>
-        <h1>BCMan - 名刺管理システム</h1>
-        <p>複数名刺画像認識・構造化登録 Web アプリケーション</p>
-    </header>
+  <a class="skip-link" href="#main">本文へ移動</a>
 
-    <nav>
-        <ul>
-            <li><a href="#about">プロジェクト概要</a></li>
-            <li><a href="#architecture">システム構成</a></li>
-            <li><a href="#features">機能一覧</a></li>
-            <li><a href="#data-model">データモデル</a></li>
-            <li><a href="#api-reference">APIリファレンス</a></li>
-            <li><a href="#development">開発ガイド</a></li>
-            <li><a href="#env-config">環境設定</a></li>
-        </ul>
+  <header class="site-header">
+    <nav class="nav" aria-label="主要ナビゲーション">
+      <a class="brand" href="#top" aria-label="BCMan 概要ページの先頭へ">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <rect x="3" y="5" width="18" height="14" rx="2"></rect>
+            <path d="M7 10h5M7 14h8M16.5 9.2h.01"></path>
+          </svg>
+        </span>
+        BCMan <span style="color:#779087;font-size:.72rem;font-weight:700">PROJECT OVERVIEW</span>
+      </a>
+      <ul class="nav-links">
+        <li><a href="#overview">概要</a></li>
+        <li><a href="#flow">利用フロー</a></li>
+        <li><a href="#features">機能</a></li>
+        <li><a href="#architecture">構成</a></li>
+        <li><a href="#security">認証・共有</a></li>
+        <li><a href="#development">開発</a></li>
+      </ul>
     </nav>
+  </header>
 
-    <section id="about">
-        <h2>1. プロジェクト概要</h2>
-        <p>BCMan (Business Card Management) は、写真に含まれる複数枚の名刺を自動検出し、OCRとLLMを用いて構造化データとして登録する名刺管理PoCシステムです。</p>
-
-        <h3>1.1 核心コンセプト</h3>
-        <ul>
-            <li><strong>Photo (写真)</strong>: アップロードされた元画像ファイル。1枚の写真に複数枚の名刺が含まれる可能性があります。</li>
-            <li><strong>Business Card (名刺)</strong>: Photoから検出された個別の名刺。検出・補正・OCR処理の単位です。</li>
-            <li><strong>Contact (連絡先)</strong>: 名刺から抽出された構造化された情報。ユーザーが確認・修正後に確定登録されます。</li>
-            <li><strong>OCR Result (OCR結果)</strong>: OCRエンジンが抽出した生テキスト。検証・再処理用に保持されます。</li>
-        </ul>
-
-        <h3>1.2 処理フロー</h3>
-        <div class="architecture-diagram">
-            <div>
-                <span class="diagram-box">写真アップロード</span>
-                <span class="diagram-arrow">↓</span>
-                <span class="diagram-box">名刺検出</span>
-                <span class="diagram-arrow">↓</span>
-                <span class="diagram-box">切り抜き・補正</span>
-                <span class="diagram-arrow">↓</span>
-                <span class="diagram-box">OCR実行</span>
-                <span class="diagram-arrow">↓</span>
-                <span class="diagram-box">LLM構造化</span>
-                <span class="diagram-arrow">↓</span>
-                <span class="diagram-box">ユーザー確認</span>
-                <span class="diagram-arrow">↓</span>
-                <span class="diagram-box">DB登録</span>
-            </div>
+  <main id="main">
+    <section class="hero" id="top">
+      <div class="container hero-grid">
+        <div>
+          <p class="eyebrow">Business card management / v0.1.0 PoC</p>
+          <h1>BCMan<span class="hero-title-jp">名刺の山を、関係の履歴へ。</span></h1>
+          <p class="hero-copy">
+            スマートフォンやPCで撮った写真から複数の名刺を切り出し、文字を読み取り、
+            人が確認した情報だけを登録する名刺管理Webアプリケーションです。
+            登録後は人物・会社ごとに接点をまとめ、組織の関係資産として閲覧できます。
+          </p>
+          <div class="hero-actions">
+            <a class="button button--primary" href="#flow">処理の流れを見る <span aria-hidden="true">↓</span></a>
+            <a class="button button--ghost" href="../../Project/README.md">READMEを開く</a>
+          </div>
         </div>
 
-        <h3>1.3 主な特徴</h3>
-        <div class="features-grid">
-            <div class="feature-card">
-                <h4>複数名刺対応</h4>
-                <p>1枚の写真に含まれる複数枚の名刺を同時に検出・処理できます。</p>
+        <div class="phone-wrap" aria-label="BCManの名刺確認画面イメージ">
+          <div class="phone">
+            <div class="phone-screen">
+              <div class="phone-bar"><span>BCMan</span><span>青柳 太郎</span></div>
+              <div class="phone-content">
+                <span class="mini-label">読み取り完了 · 要確認 1件</span>
+                <h2>名刺 2 / 4</h2>
+                <p>内容を確認し、必要な箇所だけ修正します。</p>
+                <div class="card-preview" aria-hidden="true"></div>
+                <div class="field-line"><span>会社名</span><div class="field-value">株式会社 BC Works</div></div>
+                <div class="field-line"><span>氏名</span><div class="field-value">青柳 太郎</div></div>
+                <div class="confirm-mini">登録して次へ</div>
+              </div>
+              <div class="phone-tabs"><span>●<br>撮影</span><span>○<br>台帳</span><span>○<br>名鑑</span><span>○<br>管理</span></div>
             </div>
-            <div class="feature-card">
-                <h4>切り抜き（傾き補正は未実装）</h4>
-                <p>検出した矩形領域を切り抜きます。斜めに撮影された名刺の透視変換による補正は現状未実装で、将来対応予定です。</p>
-            </div>
-            <div class="feature-card">
-                <h4>OCR & LLM</h4>
-                <p>OpenCVによる画像処理とLLMによる構造化JSON生成を組み合わせます。</p>
-            </div>
-            <div class="feature-card">
-                <h4>ユーザー確認</h4>
-                <p>AI結果は即時確定せず、ユーザーが確認・修正できる仕組みです。</p>
-            </div>
-            <div class="feature-card">
-                <h4>データ保持</h4>
-                <p>元画像・中間データ・OCR生テキストをすべて保持し、再処理が可能です。</p>
-            </div>
-            <div class="feature-card">
-                <h4>権限管理</h4>
-                <p>組織・グループ単位のデータ隔離と権限制御をサポートします。</p>
-            </div>
+          </div>
         </div>
+      </div>
     </section>
 
-    <section id="architecture">
-        <h2>2. システム構成</h2>
-        <h3>2.1 アーキテクチャ図</h3>
-        <div class="architecture-diagram">
-            <div>
-                <span class="diagram-box">Browser</span>
-                <span class="diagram-arrow">↓ HTTPS</span>
-                <span class="diagram-box">React / Vite</span>
-                <span class="diagram-arrow">↓ REST API</span>
-                <span class="diagram-box">FastAPI</span>
-                <div style="margin-top: 16px;">
-                    <span class="diagram-arrow">├</span>
-                    <span class="diagram-arrow">↓</span>
-                    <span class="diagram-arrow">↓</span>
-                    <div style="display: inline-block; text-align: center;">
-                        <span class="diagram-box" style="border-color: #059669; color: #059669;">SQLite (Dev)</span>
-                    </div>
-                    <div style="display: inline-block;">
-                        <span class="diagram-box">OpenCV（検出・クロップ）</span>
-                    </div>
-                    <span class="diagram-arrow">↓</span>
-                    <span class="diagram-box">外部LLM API（OCR・構造化、現状: Qwen3-VL系）</span>
-                </div>
-            </div>
+    <div class="container fact-strip" aria-label="BCManの特徴">
+      <div class="fact"><strong>複数枚を一括撮影</strong><span>1枚の写真から名刺候補を個別に検出・補正</span></div>
+      <div class="fact"><strong>Human in the loop</strong><span>AIの結果を自動確定せず、利用者が確認して登録</span></div>
+      <div class="fact"><strong>組織で共有</strong><span>人物・会社・交換履歴を可視範囲内で集約</span></div>
+    </div>
+
+    <section class="section" id="overview">
+      <div class="container">
+        <div class="section-heading section-heading--split">
+          <div>
+            <p class="eyebrow">01 / Project idea</p>
+            <h2>撮影から名寄せまで、ひとつながりに。</h2>
+          </div>
+          <p>
+            BCManは単なるOCR画面ではありません。入力元の写真、そこから得た名刺、
+            認識結果、利用者が確定した連絡先を分けて保持し、最後に人物・会社の関係へつなぎます。
+            どこまでが機械の提案で、どこからが人の判断かを明確にした設計です。
+          </p>
         </div>
 
-        <h3>2.2 技術スタック</h3>
-        <h4>フロントエンド</h4>
-        <table class="data-table">
-            <thead><tr><th>カテゴリ</th><th>技術</th></tr></thead>
-            <tbody>
-                <tr><td>フレームワーク</td><td>React 19（package.jsonは<code>latest</code>指定でバージョン固定なし）</td></tr>
-                <tr><td>ビルドツール</td><td>Vite</td></tr>
-                <tr><td>言語</td><td>TypeScript</td></tr>
-                <tr><td>スタイル</td><td>CSS (Grid / Flexbox)</td></tr>
-            </tbody>
-        </table>
-
-        <h4>バックエンド</h4>
-        <table class="data-table">
-            <thead><tr><th>カテゴリ</th><th>技術</th></tr></thead>
-            <tbody>
-                <tr><td>フレームワーク</td><td>FastAPI</td></tr>
-                <tr><td>言語</td><td>Python 3.11+</td></tr>
-                <tr><td>DB ORM</td><td>SQLAlchemy 2.0</td></tr>
-                <tr><td>設定管理</td><td>Pydantic Settings</td></tr>
-                <tr><td>画像処理</td><td>OpenCV, NumPy, Pillow</td></tr>
-                <tr><td>HTTPクライアント</td><td>httpx</td></tr>
-                <tr><td>DB</td><td>SQLite (開発時) / PostgreSQL (本番)</td></tr>
-            </tbody>
-        </table>
-
-        <h4>AI/MLエンジン</h4>
-        <table class="data-table">
-            <thead><tr><th>機能</th><th>技術候補</th><th>現状</th></tr></thead>
-            <tbody>
-                <tr><td>名刺検出</td><td>OpenCV / YOLO</td><td>OpenCV (PoC)</td></tr>
-                <tr><td>OCR</td><td>PaddleOCR / Cloud Vision</td><td>外部API (ykr)</td></tr>
-                <tr><td>構造化</td><td>Local LLM / OpenAI API</td><td>外部API (Qwen3-VL)</td></tr>
-            </tbody>
-        </table>
+        <div class="value-grid">
+          <article class="value-card">
+            <span class="number">1</span>
+            <h3>まとめて取り込む</h3>
+            <p>複数の名刺が写ったJPEG/PNGを受け付け、ローカルのOpenCV処理でカードらしい輪郭を抽出。四隅を使って台形補正します。</p>
+          </article>
+          <article class="value-card">
+            <span class="number">2</span>
+            <h3>一枚ずつ確かめる</h3>
+            <p>OCRと構造化の候補はそのまま登録しません。画像と14項目のフォームを見比べ、要確認項目を解消してから確定します。</p>
+          </article>
+          <article class="value-card">
+            <span class="number">3</span>
+            <h3>関係として残す</h3>
+            <p>確定済み連絡先から人物・会社を構成。重複らしい組み合わせだけを提示し、人が承認したときに初めて統合します。</p>
+          </article>
+        </div>
+      </div>
     </section>
 
-    <section id="features">
-        <h2>3. 機能一覧</h2>
-
-        <h3>3.1 写真管理</h3>
-        <table class="api-table">
-            <thead><tr><th>エンドポイント</th><th>メソッド</th><th>説明</th></tr></thead>
-            <tbody>
-                <tr><td><code>/api/photos</code></td><td class="method-post">POST</td><td>写真をアップロード</td></tr>
-                <tr><td><code>/api/photos</code></td><td class="method-get">GET</td><td>ユーザーが閲覧可能な写真一覧(名刺枚数・登録済み件数を含む)</td></tr>
-                <tr><td><code>/api/photos/{id}</code></td><td class="method-delete">DELETE</td><td>写真を削除(名刺・OCR・Contact・画像ファイルも消える)</td></tr>
-                <tr><td><code>/api/photos/{id}/thumbnail</code></td><td class="method-get">GET</td><td>写真のサムネイル(初回参照時に生成)</td></tr>
-                <tr><td><code>/api/photos/{id}/detect</code></td><td class="method-post">POST</td><td>写真から名刺を検出</td></tr>
-                <tr><td><code>/api/photos/{id}/process</code></td><td class="method-post">POST</td><td>一括処理(検出→OCR→LLM)</td></tr>
-                <tr><td><code>/api/photos/{id}/cards</code></td><td class="method-get">GET</td><td>写真に含まれる名刺一覧</td></tr>
-            </tbody>
-        </table>
-
-        <h3>3.2 名刺管理</h3>
-        <table class="api-table">
-            <thead><tr><th>エンドポイント</th><th>メソッド</th><th>説明</th></tr></thead>
-            <tbody>
-                <tr><td><code>/api/cards/{id}</code></td><td class="method-get">GET</td><td>名刺詳細(画像・OCR・Contact)</td></tr>
-                <tr><td><code>/api/cards/{id}</code></td><td class="method-delete">DELETE</td><td>名刺を削除(OCR・Contact・画像ファイルも消える)</td></tr>
-                <tr><td><code>/api/cards/{id}/image</code></td><td class="method-get">GET</td><td>名刺画像を取得</td></tr>
-                <tr><td><code>/api/cards/{id}/thumbnail</code></td><td class="method-get">GET</td><td>名刺のサムネイル(初回参照時に生成)</td></tr>
-                <tr><td><code>/api/cards/{id}/ocr</code></td><td class="method-post">POST</td><td>OCRを再実行</td></tr>
-                <tr><td><code>/api/cards/{id}/structure</code></td><td class="method-post">POST</td><td>LLM構造化を再実行</td></tr>
-                <tr><td><code>/api/cards/{id}/contact</code></td><td class="method-put">PUT</td><td>Contact情報を更新</td></tr>
-                <tr><td><code>/api/cards/{id}/confirm</code></td><td class="method-post">POST</td><td>Contactを確定登録</td></tr>
-                <tr><td><code>/api/cards/{id}/reprocess</code></td><td class="method-post">POST</td><td>OCR/LLMを再実行</td></tr>
-            </tbody>
-        </table>
-
-        <h3>3.3 組織・ユーザー管理</h3>
-        <table class="api-table">
-            <thead><tr><th>エンドポイント</th><th>メソッド</th><th>説明</th><th>権限</th></tr></thead>
-            <tbody>
-                <tr><td><code>/api/organizations</code></td><td class="method-post">POST</td><td>組織作成</td><td>system_admin</td></tr>
-                <tr><td><code>/api/organizations/{id}</code></td><td class="method-put">PUT</td><td>組織更新</td><td>system_admin / org_admin</td></tr>
-                <tr><td><code>/api/organizations/{id}/groups</code></td><td class="method-post">POST</td><td>グループ作成</td><td>system_admin / org_admin</td></tr>
-                <tr><td><code>/api/organizations/{id}/users</code></td><td class="method-post">POST</td><td>ユーザー作成</td><td>system_admin / org_admin</td></tr>
-                <tr><td><code>/api/bootstrap</code></td><td class="method-get">GET</td><td>初期データ取得</td><td>全ユーザー</td></tr>
-            </tbody>
-        </table>
-
-        <h3>3.4 ステータス一覧</h3>
-        <h4>写真のステータス</h4>
-        <p><span class="status-badge status-uploaded">uploaded</span> → <code>detecting</code> → <code>detected</code> → <span class="status-badge status-completed">completed</span> / <span class="status-badge status-failed">failed</span></p>
-
-        <h4>名刺のステータス</h4>
-        <p><code>detected</code> → <code>corrected</code> → <code>ocr_processing</code> → <code>ocr_completed</code> → <code>llm_processing</code> → <code>review_required</code> → <code>confirmed</code></p>
-        <p><small>※ <code>failed</code> は写真（Photo）のステータスであり、現状の実装では名刺（BusinessCard）個別のステータスとしては遷移しません。</small></p>
-    </section>
-
-    <section id="data-model">
-        <h2>4. データモデル</h2>
-        <p>DBスキーマは SQLAlchemy ORM で定義されています。すべてのレコードは UUID v4 を主キーとします。</p>
-
-        <h3>4.1 Organization (組織)</h3>
-        <table class="data-table">
-            <thead><tr><th>カラム</th><th>型</th><th>説明</th></tr></thead>
-            <tbody>
-                <tr><td>id</td><td>UUID</td><td>主キー</td></tr>
-                <tr><td>name</td><td>String</td><td>組織名（一意）</td></tr>
-                <tr><td>sharing_mode</td><td>String</td><td>共有モード: isolated / shared</td></tr>
-                <tr><td>created_at</td><td>DateTime</td><td>作成日時</td></tr>
-            </tbody>
-        </table>
-
-        <h3>4.2 Group (グループ)</h3>
-        <table class="data-table">
-            <thead><tr><th>カラム</th><th>型</th><th>説明</th></tr></thead>
-            <tbody>
-                <tr><td>id</td><td>UUID</td><td>主キー</td></tr>
-                <tr><td>organization_id</td><td>UUID</td><td>親組織（FK）</td></tr>
-                <tr><td>name</td><td>String</td><td>グループ名</td></tr>
-            </tbody>
-        </table>
-
-        <h3>4.3 User (利用者)</h3>
-        <table class="data-table">
-            <thead><tr><th>カラム</th><th>型</th><th>説明</th></tr></thead>
-            <tbody>
-                <tr><td>id</td><td>UUID</td><td>主キー</td></tr>
-                <tr><td>organization_id</td><td>UUID</td><td>所属組織（FK、null可）</td></tr>
-                <tr><td>group_id</td><td>UUID</td><td>所属グループ（FK、null可）</td></tr>
-                <tr><td>name</td><td>String</td><td>表示名</td></tr>
-                <tr><td>role</td><td>String</td><td>ロール: system_admin / org_admin / member</td></tr>
-            </tbody>
-        </table>
-
-        <h3>4.4 Photo (写真)</h3>
-        <table class="data-table">
-            <thead><tr><th>カラム</th><th>型</th><th>説明</th></tr></thead>
-            <tbody>
-                <tr><td>id</td><td>UUID</td><td>主キー</td></tr>
-                <tr><td>organization_id</td><td>UUID</td><td>親組織（FK）</td></tr>
-                <tr><td>group_id</td><td>UUID</td><td>親グループ（FK）</td></tr>
-                <tr><td>original_filename</td><td>String</td><td>元ファイル名</td></tr>
-                <tr><td>storage_path</td><td>String</td><td>保存パス</td></tr>
-                <tr><td>width</td><td>Integer</td><td>画像幅</td></tr>
-                <tr><td>height</td><td>Integer</td><td>画像高さ</td></tr>
-                <tr><td>status</td><td>String</td><td>処理ステータス</td></tr>
-                <tr><td>created_at</td><td>DateTime</td><td>アップロード日時</td></tr>
-            </tbody>
-        </table>
-
-        <h3>4.5 BusinessCard (名刺)</h3>
-        <table class="data-table">
-            <thead><tr><th>カラム</th><th>型</th><th>説明</th></tr></thead>
-            <tbody>
-                <tr><td>id</td><td>UUID</td><td>主キー</td></tr>
-                <tr><td>photo_id</td><td>UUID</td><td>親写真（FK）</td></tr>
-                <tr><td>detected_image_path</td><td>String</td><td>検出画像パス</td></tr>
-                <tr><td>corrected_image_path</td><td>String</td><td>補正画像パス</td></tr>
-                <tr><td>detection_confidence</td><td>Float</td><td>検出信頼度</td></tr>
-                <tr><td>x, y</td><td>Integer</td><td>検出位置（左上座標）</td></tr>
-                <tr><td>width, height</td><td>Integer</td><td>検出サイズ</td></tr>
-                <tr><td>status</td><td>String</td><td>処理ステータス</td></tr>
-                <tr><td>created_at</td><td>DateTime</td><td>検出日時</td></tr>
-            </tbody>
-        </table>
-
-        <h3>4.6 Contact (連絡先)</h3>
-        <table class="data-table">
-            <thead><tr><th>カラム</th><th>型</th><th>説明</th></tr></thead>
-            <tbody>
-                <tr><td>id</td><td>UUID</td><td>主キー</td></tr>
-                <tr><td>card_id</td><td>UUID</td><td>親名刺（FK、一意）</td></tr>
-                <tr><td>company_name</td><td>String</td><td>会社名</td></tr>
-                <tr><td>company_name_kana</td><td>String</td><td>会社名カナ</td></tr>
-                <tr><td>department</td><td>String</td><td>部署名</td></tr>
-                <tr><td>position</td><td>String</td><td>役職</td></tr>
-                <tr><td>person_name</td><td>String</td><td>氏名</td></tr>
-                <tr><td>person_name_kana</td><td>String</td><td>氏名カナ</td></tr>
-                <tr><td>postal_code</td><td>String</td><td>郵便番号</td></tr>
-                <tr><td>address</td><td>Text</td><td>住所</td></tr>
-                <tr><td>telephone</td><td>String</td><td>電話番号</td></tr>
-                <tr><td>fax</td><td>String</td><td>FAX</td></tr>
-                <tr><td>mobile</td><td>String</td><td>携帯番号</td></tr>
-                <tr><td>email</td><td>String</td><td>メールアドレス</td></tr>
-                <tr><td>website</td><td>String</td><td>ウェブサイト</td></tr>
-                <tr><td>notes</td><td>Text</td><td>備考</td></tr>
-                <tr><td>confirmed</td><td>Boolean</td><td>確定フラグ</td></tr>
-                <tr><td>created_at</td><td>DateTime</td><td>作成日時</td></tr>
-                <tr><td>updated_at</td><td>DateTime</td><td>更新日時</td></tr>
-            </tbody>
-        </table>
-
-        <h3>4.7 OCRResult (OCR結果)</h3>
-        <table class="data-table">
-            <thead><tr><th>カラム</th><th>型</th><th>説明</th></tr></thead>
-            <tbody>
-                <tr><td>id</td><td>UUID</td><td>主キー</td></tr>
-                <tr><td>card_id</td><td>UUID</td><td>親名刺（FK）</td></tr>
-                <tr><td>engine</td><td>String</td><td>OCRエンジン識別子</td></tr>
-                <tr><td>engine_version</td><td>String</td><td>エンジンバージョン</td></tr>
-                <tr><td>raw_text</td><td>Text</td><td>OCR生テキスト</td></tr>
-                <tr><td>raw_json</td><td>JSON</td><td>OCR APIの生レスポンス</td></tr>
-                <tr><td>created_at</td><td>DateTime</td><td>実行日時</td></tr>
-            </tbody>
-        </table>
-
-        <h3>4.8 ProcessingHistory (処理履歴)</h3>
-        <table class="data-table">
-            <thead><tr><th>カラム</th><th>型</th><th>説明</th></tr></thead>
-            <tbody>
-                <tr><td>id</td><td>UUID</td><td>主キー</td></tr>
-                <tr><td>card_id</td><td>UUID</td><td>親名刺（FK）</td></tr>
-                <tr><td>process_type</td><td>String</td><td>処理種別: ocr / llm</td></tr>
-                <tr><td>engine</td><td>String</td><td>使用エンジン</td></tr>
-                <tr><td>version</td><td>String</td><td>エンジンバージョン</td></tr>
-                <tr><td>input_json</td><td>JSON</td><td>入力データ</td></tr>
-                <tr><td>output_json</td><td>JSON</td><td>出力データ</td></tr>
-                <tr><td>created_at</td><td>DateTime</td><td>実行日時</td></tr>
-            </tbody>
-        </table>
-
-        <h3>4.9 AuditLog (操作ログ)</h3>
-        <p>写真・名刺は物理削除するため、失われたものの記録はこのテーブルにしか残らない。参照用の画面はまだない。</p>
-        <table class="data-table">
-            <thead><tr><th>カラム</th><th>型</th><th>説明</th></tr></thead>
-            <tbody>
-                <tr><td>id</td><td>UUID</td><td>主キー</td></tr>
-                <tr><td>user_id</td><td>String</td><td>操作した利用者のID（FKではない）</td></tr>
-                <tr><td>user_name</td><td>String</td><td>操作した利用者の名前。利用者が消えても辿れるよう値で複製する</td></tr>
-                <tr><td>action</td><td>String</td><td>操作種別: delete</td></tr>
-                <tr><td>target_type</td><td>String</td><td>対象種別: photo / card</td></tr>
-                <tr><td>target_id</td><td>String</td><td>対象のID</td></tr>
-                <tr><td>detail</td><td>JSON</td><td>消えた内容の要約（会社名・氏名・確定登録済みか）</td></tr>
-                <tr><td>created_at</td><td>DateTime</td><td>操作日時</td></tr>
-            </tbody>
-        </table>
-    </section>
-
-    <section id="api-reference">
-        <h2>5. APIリファレンス</h2>
-
-        <h3>5.1 ヘルスチェック</h3>
-        <div class="code-block">GET /api/health</div>
-        <div class="code-block">{"status":"ok"}</div>
-
-        <h3>5.2 写真アップロード</h3>
-        <div class="code-block">POST /api/photos</div>
-        <p><code>Content-Type: multipart/form-data</code></p>
-        <p>Headers: <code>X-User-Id</code> (オプション)</p>
-        <div class="code-block">FormData: { file: Blob }</div>
-        <div class="code-block">レスポンス: {"photo_id": "uuid", "status": "uploaded"}</div>
-
-        <h3>5.3 名刺検出</h3>
-        <div class="code-block">POST /api/photos/{photo_id}/detect</div>
-        <div class="code-block">レスポンス: {"photo_id": "uuid", "detected_count": 3}</div>
-
-        <h3>5.4 名刺一覧取得</h3>
-        <div class="code-block">GET /api/photos/{photo_id}/cards</div>
-        <div class="code-block">レスポンス: [
-  {
-    "id": "uuid",
-    "status": "detected",
-    "confidence": 0.97,
-    "bounding_box": {"x": 120, "y": 80, "width": 620, "height": 350}
-  }
-]</div>
-
-        <h3>5.5 名刺詳細取得</h3>
-        <div class="code-block">GET /api/cards/{card_id}</div>
-        <div class="code-block">レスポンス: {
-  "id": "uuid",
-  "status": "review_required",
-  "image_url": "/api/cards/id/image",
-  "contact": { "company_name": "...", ... },
-  "ocr_text": "OCR生テキスト"
-}</div>
-
-        <h3>5.6 Contact更新</h3>
-        <div class="code-block">PUT /api/cards/{card_id}/contact</div>
-        <div class="code-block">Body: {
-  "company_name": "株式会社ABC",
-  "person_name": "山田 太郎",
-  ...
-}</div>
-        <div class="code-block">レスポンス: Contactオブジェクト</div>
-
-        <h3>5.7 確定登録</h3>
-        <div class="code-block">POST /api/cards/{card_id}/confirm</div>
-        <div class="code-block">レスポンス: {"status": "confirmed"}</div>
-
-        <h3>5.8 写真一覧取得</h3>
-        <div class="code-block">GET /api/photos</div>
-        <div class="code-block">レスポンス: [
-  {
-    "id": "uuid",
-    "filename": "IMG_0001.jpg",
-    "status": "completed",
-    "created_at": "2026-08-12T05:30:00",
-    "card_count": 3,
-    "confirmed_count": 2
-  }
-]</div>
-
-        <h3>5.9 削除</h3>
-        <div class="code-block">DELETE /api/photos/{photo_id}</div>
-        <div class="code-block">DELETE /api/cards/{card_id}</div>
-        <div class="code-block">レスポンス: {"deleted": true}</div>
-        <p>物理削除。写真を消すと配下の名刺・OCR結果・Contact・処理履歴と、ストレージ上の画像ファイルがまとめて消える。確定登録済みのContactが含まれていても削除は止めない。消えた内容の要約はAuditLogに残す。閲覧できる利用者は削除もできる。</p>
-
-        <h3>5.10 サムネイル取得</h3>
-        <div class="code-block">GET /api/photos/{photo_id}/thumbnail</div>
-        <div class="code-block">GET /api/cards/{card_id}/thumbnail</div>
-        <p>長辺800pxのJPEGを返す。初回参照時に生成して <code>thumb.jpg</code> として保存し、以降はそれを返す。<code>Cache-Control: private, max-age=604800</code>。元画像が無い古いデータでは404。</p>
-
-        <h3>5.11 Bootstrapデータ取得</h3>
-        <div class="code-block">GET /api/bootstrap</div>
-        <div class="code-block">レスポンス: {
-  "users": [{"id": "...", "name": "...", "role": "...", ...}],
-  "organizations": [{"id": "...", "name": "...", "sharing_mode": "..."}],
-  "groups": [{"id": "...", "organization_id": "...", "name": "..."}]
-}</div>
-    </section>
-
-    <section id="development">
-        <h2>6. 開発ガイド</h2>
-
-        <h3>6.1 環境準備</h3>
-        <div class="highlight">
-            <p><strong>前提条件:</strong> Python 3.11+, Node.js 18+, npm 9+</p>
+    <section class="section section--dark" id="flow">
+      <div class="container">
+        <div class="section-heading">
+          <p class="eyebrow" style="color:var(--mint)">02 / Capture to directory</p>
+          <h2>利用フロー</h2>
+          <p>スマートフォンで立ったまま使う場面を中心に、撮影・進捗・確認を一列につないでいます。</p>
         </div>
 
-        <h4>Backend (FastAPI)</h4>
-        <div class="code-block">cd Project/backend
+        <div class="flow" aria-label="BCManの利用フロー">
+          <div class="flow-step">
+            <div class="flow-dot">01</div>
+            <h3>撮影・選択</h3>
+            <p>登録先グループを選び、カメラまたは既存画像から写真を送信。</p>
+          </div>
+          <div class="flow-step">
+            <div class="flow-dot">02</div>
+            <h3>検出・補正</h3>
+            <p>輪郭から複数名刺を検出し、四隅を整列して正面画像へ変換。</p>
+          </div>
+          <div class="flow-step">
+            <div class="flow-dot">03</div>
+            <h3>OCR・構造化</h3>
+            <p>最大3枚を並行処理。文字起こし後、連絡先の各項目へ構造化。</p>
+          </div>
+          <div class="flow-step">
+            <div class="flow-dot">04</div>
+            <h3>確認・登録</h3>
+            <p>画像をめくりながら修正。向きは90度単位で利用者が確定。</p>
+          </div>
+          <div class="flow-step">
+            <div class="flow-dot">05</div>
+            <h3>名鑑へ反映</h3>
+            <p>人物・会社と接点履歴を作り、必要なら統合候補を後で審査。</p>
+          </div>
+        </div>
+
+        <div class="flow-note">
+          <strong>Best effort:</strong> 8枚を品質目標とし、検出候補は安全弁として最大12枚。
+          個別の認識失敗は他の名刺を止めず、自動再試行後も失敗したカードは画像を見ながら手入力できます。
+          外形を検出できない場合は、写真全体を低信頼度の1枚として扱います。
+        </div>
+      </div>
+    </section>
+
+    <section class="section section--white" id="features">
+      <div class="container">
+        <div class="section-heading">
+          <p class="eyebrow">03 / Product surface</p>
+          <h2>日々の作業を4つの入口に整理</h2>
+          <p>撮影を主役にしながら、過去データの参照、名寄せ、組織管理を独立したタブに分けています。</p>
+        </div>
+
+        <div class="feature-layout">
+          <aside class="tabs-visual" aria-label="アプリの主要タブ">
+            <div class="tabs-visual-header"><small>APP NAVIGATION</small><h3>モバイルファーストPWA</h3></div>
+            <div class="tab-item"><span class="tab-icon">01</span><span><strong>撮影</strong>アップロードから確認・登録まで</span></div>
+            <div class="tab-item"><span class="tab-icon">02</span><span><strong>台帳</strong>登録済み名刺の検索・修正／写真からも辿れる</span></div>
+            <div class="tab-item"><span class="tab-icon">03</span><span><strong>名鑑</strong>人物・会社・統合候補</span></div>
+            <div class="tab-item"><span class="tab-icon">04</span><span><strong>管理</strong>管理者向けユーザ・端末管理</span></div>
+          </aside>
+
+          <div class="feature-grid">
+            <article class="feature-card">
+              <span class="feature-kicker">CAPTURE &amp; REVIEW</span>
+              <h3>途中からでも確認できる</h3>
+              <p>完了した名刺からすぐに確認を開始。左右スワイプや矢印で自由に移動し、離れたページの下書きも保持します。</p>
+              <div class="pill-row"><span class="pill">進捗表示</span><span class="pill">下書き保存</span><span class="pill">一括登録</span></div>
+            </article>
+            <article class="feature-card">
+              <span class="feature-kicker">MANUAL CONTROL</span>
+              <h3>判断をAI任せにしない</h3>
+              <p>読み取り方向は自動推定せず、撮影時の向きを初期値にします。90度単位の補正を確定すると、その向きのまま再認識します。</p>
+              <div class="pill-row"><span class="pill">回転プレビュー</span><span class="pill">再解析</span><span class="pill">要確認フラグ</span></div>
+            </article>
+            <article class="feature-card">
+              <span class="feature-kicker">RELATIONSHIP DIRECTORY</span>
+              <h3>名刺ではなく「接点」を見る</h3>
+              <p>同じ人物の複数名刺を交換日順に並べます。転職や部署変更があっても、過去の会社名と名刺所有者を各接点に残します。</p>
+              <div class="pill-row"><span class="pill">人物</span><span class="pill">会社</span><span class="pill">接点履歴</span><span class="pill">分離</span></div>
+            </article>
+            <article class="feature-card">
+              <span class="feature-kicker">SUGGEST, NEVER AUTO-MERGE</span>
+              <h3>統合は必ず人が承認</h3>
+              <p>メール一致、氏名＋会社名の正規化一致、会社名やWebドメイン一致から候補を作りますが、自動ではまとめません。</p>
+              <div class="pill-row"><span class="pill">承認</span><span class="pill">却下</span><span class="pill">共有範囲内のみ</span></div>
+            </article>
+            <article class="feature-card">
+              <span class="feature-kicker">LEDGER SEARCH</span>
+              <h3>登録した後から直せる</h3>
+              <p>会社名・氏名・電話番号などを1つの入力欄で横断検索。全半角、空白、ハイフンの表記ゆれを吸収するので「青柳 太郎」を「青柳太郎」でも引けます。</p>
+              <div class="pill-row"><span class="pill">空白区切りAND</span><span class="pill">交換日順</span><span class="pill">明示の保存</span></div>
+            </article>
+            <article class="feature-card">
+              <span class="feature-kicker">RETAKE</span>
+              <h3>ぼやけた1枚を撮り直す</h3>
+              <p>名刺1枚だけを撮り直して画像を差し替えられます。切り出し結果を確認してから採用し、読み取りもやり直すかはその場で選びます。</p>
+              <div class="pill-row"><span class="pill">切り出しプレビュー</span><span class="pill">読み直しは任意</span><span class="pill">撮影原本が無くても可</span></div>
+            </article>
+            <article class="feature-card feature-card--wide">
+              <span class="feature-kicker">CONTACT FIELDS</span>
+              <h3>構造化する14項目</h3>
+              <p>会社名、会社名カナ、部署、役職、氏名、氏名カナ、郵便番号、住所、電話、FAX、携帯、メール、Webサイト、備考。確定時には名刺所有者と実際の交換日も記録します。</p>
+            </article>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="architecture">
+      <div class="container">
+        <div class="section-heading section-heading--split">
+          <div>
+            <p class="eyebrow">04 / Architecture</p>
+            <h2>小さく始める、分離された構成</h2>
+          </div>
+          <p>UI、REST API、ローカル画像処理、外部AI、永続化を分けたDocker不要のPoCです。公開時はnginx配下の <code>/bcman/</code> を前提にします。</p>
+        </div>
+
+        <div class="architecture" role="img" aria-label="PCまたはスマートフォンのReact PWAがFastAPIへ接続し、FastAPIがOpenCV、AI API、データベースと画像ストレージを利用する構成">
+          <div class="arch-row">
+            <div class="arch-node"><small>CLIENT</small><strong>PC / Smartphone</strong><span>カメラ・ファイル選択<br>インストール可能なPWA</span></div>
+            <div class="arch-node arch-node--accent"><small>FRONTEND</small><strong>React + TypeScript + Vite</strong><span>単一カラムの確認フロー<br>2.5秒間隔の進捗ポーリング</span></div>
+            <div class="arch-node arch-node--primary"><small>API</small><strong>FastAPI</strong><span>Cookieセッション / REST API<br>バックグラウンド処理</span></div>
+          </div>
+          <div class="arch-connector" aria-hidden="true"></div>
+          <div class="arch-row">
+            <div class="arch-node"><small>IMAGE</small><strong>OpenCV + Pillow</strong><span>輪郭検出・台形補正<br>回転・サムネイル生成</span></div>
+            <div class="arch-node"><small>INTELLIGENCE</small><strong>OpenAI互換 AI API</strong><span>マルチモーダルOCR<br>JSON形式への構造化</span></div>
+            <div class="arch-node"><small>PERSISTENCE</small><strong>SQLAlchemy + Filesystem</strong><span>SQLiteが既定のDB<br>画像はUUID単位で保存</span></div>
+          </div>
+          <p class="arch-caption">補足: AIの接続先・モデル、DB URL、保存先、アップロード上限は <code>backend/.env</code> で差し替えられます。</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section section--dark" id="domain-model">
+      <div class="container">
+        <div class="section-heading">
+          <p class="eyebrow" style="color:var(--mint)">05 / Domain model</p>
+          <h2>3つの文脈をIDでつなぐ</h2>
+          <p>責任範囲を混ぜず、認証・名刺処理・名鑑をそれぞれ独立した言葉で扱います。</p>
+        </div>
+
+        <div class="model-grid">
+          <article class="model-card">
+            <span class="model-index">Context 01</span>
+            <h3>Identity</h3>
+            <p>誰がログインし、どの組織・グループに属し、どこまで見えるかを決めます。</p>
+            <ul class="entity-list"><li>Organization / Sharing Mode</li><li>Group / User / Role</li><li>Session / Trusted Device / TOTP</li></ul>
+          </article>
+          <article class="model-card">
+            <span class="model-index">Context 02</span>
+            <h3>Business Card Management</h3>
+            <p>写真から、人が確認した連絡先が生まれるまでの証拠と状態を管理します。</p>
+            <ul class="entity-list"><li>Photo → Business Card</li><li>Recognition Result → Contact</li><li>Ledger / Card Retake</li><li>Processing History / Audit Log</li></ul>
+          </article>
+          <article class="model-card">
+            <span class="model-index">Context 03</span>
+            <h3>Directory</h3>
+            <p>確定済み連絡先を人物・会社へ結び、交換の履歴と統合判断を管理します。</p>
+            <ul class="entity-list"><li>Person / Company</li><li>Touch History</li><li>Merge Candidate / Split</li></ul>
+          </article>
+        </div>
+
+        <div class="rules-grid">
+          <article class="rule-card"><h3><span class="rule-mark">✓</span>PhotoとBusiness Cardは別物</h3><p>Photoは撮影シーン全体、Business Cardはそこから得た一枚分の補正画像と処理状態です。原本を消しても名刺の証拠を残せます。</p></article>
+          <article class="rule-card"><h3><span class="rule-mark">✓</span>ContactとPersonは別物</h3><p>Contactは一枚の名刺から確定した情報、Personは複数の確定Contactを人が統合した結果です。自動統合は行いません。</p></article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section section--white" id="security">
+      <div class="container">
+        <div class="section-heading">
+          <p class="eyebrow">06 / Identity &amp; privacy</p>
+          <h2>個人情報を、境界の内側で扱う</h2>
+          <p>Organizationを越える参照は許さず、組織内は運用に合わせて「グループ分離」か「組織共有」を選びます。</p>
+        </div>
+
+        <div class="security-grid">
+          <div class="scope-map">
+            <h3>可視範囲の考え方</h3>
+            <div class="scope-layers">
+              <div class="scope-layer"><strong>Organization — 厳格な境界</strong><p>別Organizationの写真・名刺・人物・会社は参照不可</p></div>
+              <div class="scope-layer"><strong>shared — 組織内で共有</strong><p>所属Groupにかかわらず、同じOrganizationのデータを共有</p></div>
+              <div class="scope-layer"><strong>isolated — Group単位</strong><p>一般利用者は所属する全Groupのデータだけを参照</p></div>
+            </div>
+          </div>
+
+          <div class="security-list">
+            <article class="security-item"><span class="security-icon">ID</span><div><h3>管理者が利用者を作成</h3><p>自己登録はありません。Roleは管理者 / 一般利用者の2種類です。</p></div></article>
+            <article class="security-item"><span class="security-icon">2F</span><div><h3>未知の端末ではTOTP</h3><p>Office Network外の未登録ブラウザは登録コードを要求。通過後は90日間Trusted Deviceとして記憶します。</p></div></article>
+            <article class="security-item"><span class="security-icon">8h</span><div><h3>Cookieセッション</h3><p>トークンはDBにハッシュで保持し、アイドル8時間で失効。管理者は信頼端末を即時失効できます。</p></div></article>
+            <article class="security-item"><span class="security-icon">5×</span><div><h3>ログイン試行を制限</h3><p>5回の失敗で15分ロック。管理者によるパスワード・TOTP再設定とロック解除に対応します。</p></div></article>
+          </div>
+        </div>
+
+        <div class="retention">
+          <div><strong>確認前</strong><span>撮影原本 + 切り出した名刺画像 + 認識結果</span></div>
+          <span class="retention-arrow" aria-hidden="true">→</span>
+          <div><strong>確認完了後（既定）</strong><span>撮影原本だけを削除。名刺画像・連絡先・処理履歴は保持。原本を残す選択も可能</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="development">
+      <div class="container">
+        <div class="section-heading section-heading--split">
+          <div>
+            <p class="eyebrow">07 / Developer guide</p>
+            <h2>ローカルで動かす</h2>
+          </div>
+          <p>Python 3.11+、Poetry、Node.js / npmが前提です。初回は依存関係を導入し、AI APIの設定を追加します。</p>
+        </div>
+
+        <div class="dev-grid">
+          <div class="stack-grid" aria-label="技術スタック">
+            <div class="stack-item"><small>UI</small><strong>React / TypeScript / Vite</strong></div>
+            <div class="stack-item"><small>API</small><strong>FastAPI / Uvicorn</strong></div>
+            <div class="stack-item"><small>DATA</small><strong>SQLAlchemy / SQLite</strong></div>
+            <div class="stack-item"><small>IMAGE</small><strong>OpenCV / Pillow</strong></div>
+            <div class="stack-item"><small>AUTH</small><strong>bcrypt / pyotp</strong></div>
+            <div class="stack-item"><small>TEST</small><strong>pytest / TypeScript build</strong></div>
+          </div>
+
+          <div class="code-panel" aria-label="セットアップコマンド">
+            <div class="code-title"><span class="code-dot"></span><span class="code-dot"></span><span class="code-dot"></span>PowerShell</div>
+            <pre><code># 1. AI接続を設定
+cd Project/backend
+Copy-Item .env.example .env
+# .env の AI_API_KEY / AI_MODEL を編集
+
+# 2. Organizationと初期管理者を作成
 poetry install
-cp .env.example .env  # OCR APIキーを設定
-poetry run uvicorn app.main:app --reload --port 8000</div>
+poetry run python -m app.cli create-org `
+  --name "会社名" --group "一般" `
+  --admin-username admin --admin-name "管理者 太郎"
 
-        <h4>Frontend (React/Vite)</h4>
-        <div class="code-block">cd Project/frontend
-npm install
-npm run dev</div>
+# 3. フロントエンドとAPIを起動
+cd ..
+.\start.ps1 -Install
 
-        <h3>6.2 ディレクトリ構成</h3>
-        <div class="code-block">bcman/
-├── CONTEXT.md                  # ドメインモデル・用語集
-├── Project/
-│   ├── start.ps1                # 起動スクリプト
-│   ├── backend/
-│   │   ├── app/
-│   │   │   ├── __init__.py
-│   │   │   ├── main.py          # FastAPIアプリケーション
-│   │   │   ├── models.py        # SQLAlchemyモデル
-│   │   │   ├── schemas.py       # Pydanticスキーマ
-│   │   │   ├── services.py      # 処理ロジック
-│   │   │   ├── database.py      # DB接続
-│   │   │   ├── settings.py      # 設定管理
-│   │   │   └── __pycache__/
-│   │   ├── .env                 # 環境変数
-│   │   ├── .env.example         # 環境変数テンプレート
-│   │   ├── pyproject.toml
-│   │   └── storage/             # 画像保存ディレクトリ
-│   └── frontend/
-│       ├── src/
-│       │   ├── main.tsx         # Reactエントリーポイント
-│       │   ├── style.css        # スタイル定義
-│       │   └── ...
-│       ├── index.html
-│       ├── package.json
-│       └── tsconfig.json
-└── docs/
-    ├── adr/
-    │   ├── 0001-organization-sharing-mode.md
-    │   ├── 0002-mobile-first-capture-flow.md
-    │   ├── 0003-card-navigation-and-ordering.md
-    │   └── 0004-deletion-and-thumbnails.md
-    ├── business_card_webapp_spec.md
-    └── html/
-        └── index.html          # このドキュメント</div>
-
-        <h3>6.3 主要処理フロー</h3>
-        <h4>写真処理 (services.py)</h4>
-        <ol>
-            <li><code>detect_cards()</code>: OpenCVでCanny Edge + Contours検出</li>
-            <li>面積・縦横比で名刺候補をフィルタリング</li>
-            <li>候補を写真上の配置順（上の行から、行内は左から）に並べ替え（ADR 0003参照）</li>
-            <li>各候補を切り抜き、detected.jpg / corrected.jpg に保存</li>
-            <li><code>run_ocr()</code>: 画像をBase64エンコードしてOCR APIに送信</li>
-            <li><code>structure()</code>: OCR結果をLLMに渡し、JSON構造化</li>
-        </ol>
-
-        <h4>ストレージ構成</h4>
-        <div class="code-block">storage/photos/{photo_id}/
-├── original.jpg        # 原本（PNGなら original.png）
-├── thumb.jpg           # 一覧用サムネイル（初回参照時に生成）
-└── cards/{card_id}/
-    ├── detected.jpg    # 切り抜き
-    ├── corrected.jpg   # 補正画像（OCRの入力）
-    └── thumb.jpg       # 一覧用サムネイル（初回参照時に生成）</div>
-
-        <h4>削除 (ADR 0004参照)</h4>
-        <ol>
-            <li><code>delete_card()</code>: Contact / OCRResult / ProcessingHistory を消し、名刺の行と <code>cards/{card_id}/</code> を消す</li>
-            <li><code>delete_photo()</code>: 配下の名刺すべてに上記を適用し、写真の行と <code>photos/{photo_id}/</code> を消す</li>
-            <li>外部キーに CASCADE を張っていないため、子から順に明示的に消す</li>
-            <li>消す前に内容の要約を作り、<code>AuditLog</code> に記録してから commit する</li>
-        </ol>
-
-        <h4>権限判定</h4>
-        <ul>
-            <li><code>system_admin</code>: 全データ閲覧・操作可能</li>
-            <li><code>org_admin</code>: 自組織の全データ閲覧・操作可能</li>
-            <li><code>member</code>: 自グループのデータのみ閲覧・操作可能。ただし所属組織の <code>sharing_mode</code> が <code>shared</code> の場合は組織全体のデータを閲覧・操作可能（ADR 0001参照）</li>
-        </ul>
-
-        <h3>6.4 拡張ポイント</h3>
-        <h4>名刺検出エンジン切り替え</h4>
-        <p><code>services.py</code> の <code>detect_cards()</code> を置き換えることで、OpenCVからYOLOなどに切り替えられます。</p>
-
-        <h4>OCRエンジン切り替え</h4>
-        <p><code>services.py</code> の <code>chat()</code> 関数で使用するAPIエンドポイントとプロンプトを変更することで、PaddleOCRやCloud Visionに切り替えられます。</p>
-
-        <h4>LLM構造化プロンプト</h4>
-        <p><code>STRUCTURE_PROMPT</code> (services.py 13行目) を編集することで、抽出項目や指示をカスタマイズできます。</p>
-    </section>
-
-    <section id="env-config">
-        <h2>7. 環境設定</h2>
-        <p><code>Project/backend/.env</code> に以下の設定を記述してください。</p>
-
-        <table class="env-table">
-            <thead><tr><th>変数名</th><th>説明</th><th>既定値</th><th>必須</th></tr></thead>
-            <tbody>
-                <tr><td>DATABASE_URL</td><td>データベース接続URL</td><td><code>sqlite:///./bcman.db</code></td><td>いいえ</td></tr>
-                <tr><td>STORAGE_DIR</td><td>画像保存ディレクトリ</td><td><code>./storage</code></td><td>いいえ</td></tr>
-                <tr><td>ROOT_PATH</td><td>APIのルートパス</td><td><code>/bcman</code></td><td>いいえ</td></tr>
-                <tr><td>AI_BASE_URL</td><td>AI APIベースURL</td><td><code>https://app.ykr.ltd/ai/v1</code></td><td>いいえ</td></tr>
-                <tr><td>AI_API_KEY</td><td>AI APIキー</td><td><em>(empty)</em></td><td>はい</td></tr>
-                <tr><td>AI_MODEL</td><td>AIモデル名</td><td><em>(empty)</em>（例: <code>Qwen/Qwen3-VL-8B-Instruct</code>）</td><td>はい</td></tr>
-                <tr><td>MAX_UPLOAD_BYTES</td><td>アップロード上限バイト数</td><td><code>20971520</code> (20MB)</td><td>いいえ</td></tr>
-            </tbody>
-        </table>
-
-        <div class="highlight">
-            <p><strong>注意:</strong> 初回起動時に、システム管理者・サンプル組織・一般グループに加え、そのサンプル組織に属する組織管理者ユーザーも自動生成されます。</p>
+# Frontend  http://localhost:5173/bcman/
+# API       http://localhost:8000/bcman/api/health</code></pre>
+          </div>
         </div>
 
-        <div class="warning">
-            <p><strong>⚠ 開発中注意:</strong> 現在の実装では認証は完全ではありません。開発環境では <code>X-User-Id</code> ヘッダーでユーザーを切り替えられます。本番環境ではJWTやセッション認証を実装してください。</p>
+        <div class="caveat-grid" aria-label="現在のPoCの前提と制約">
+          <article class="note-card"><strong>画像入力</strong><p>JPEG / PNG、1ファイル20MBまで。HEICは未対応です。</p></article>
+          <article class="note-card"><strong>処理方式</strong><p>FastAPI BackgroundTasksによる単一プロセス内の並行処理です。</p></article>
+          <article class="note-card"><strong>永続化</strong><p>既定はローカルSQLiteとファイル保存。接続先は環境変数で変更できます。</p></article>
+          <article class="note-card"><strong>位置づけ</strong><p>Dockerを使わないPoC。可用性、キュー、バックアップ等は本番化時の設計対象です。</p></article>
         </div>
-    </section>
 
-    <footer>
-        <p>BCMan v0.1.0 - 名刺管理システム PoC</p>
-        <p>© 2024 BCMan Project</p>
-    </footer>
-</div>
+        <div class="docs-links" aria-label="関連ドキュメント">
+          <a class="doc-link" href="../../CONTEXT-MAP.md"><small>CONTEXT-MAP.md</small><strong>全体の文脈と依存関係</strong></a>
+          <a class="doc-link" href="../../CONTEXT.md"><small>CONTEXT.md</small><strong>名刺管理の用語とルール</strong></a>
+          <a class="doc-link" href="../identity/CONTEXT.md"><small>identity/CONTEXT.md</small><strong>認証・組織・共有範囲</strong></a>
+          <a class="doc-link" href="../directory/CONTEXT.md"><small>directory/CONTEXT.md</small><strong>人物・会社・名寄せ</strong></a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="container footer-inner">
+      <div><span class="footer-brand">BCMan</span><br>Business Card Management PoC</div>
+      <div>現行コード・ドメイン定義・ADRを基に作成 · 2026-08-15</div>
+    </div>
+  </footer>
 </body>
 </html>
