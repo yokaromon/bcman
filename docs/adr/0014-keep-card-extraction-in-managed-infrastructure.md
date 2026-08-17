@@ -1,0 +1,5 @@
+# Keep card extraction inside managed infrastructure
+
+Card Detection and Card Extraction must not send a Photo, a derived image or its visual features to an inference service outside infrastructure controlled by the deployment owner. The configured https://app.ykr.ltd/ai/v1 endpoint is operated by the deployment owner and is therefore inside this managed boundary. A versioned learned-model artifact may be bundled and executed inside the same boundary when it improves Extraction Acceptance; this permits model-based detection without exposing business-card images to an unmanageable service, while leaving the choice between classical image processing and a learned model to measured evaluation.
+
+In the current deployment, Card Detection and Card Extraction execute inside the BCMan backend with CPU inference and any required versioned model artifact bundled alongside it; they make no network call, including to the managed AI endpoint. A separate managed inference service is deferred unless measurements show that the production CPU cannot meet the agreed performance target, avoiding an additional API contract and operational dependency before it is needed.

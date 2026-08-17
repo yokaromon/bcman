@@ -12,6 +12,10 @@ _Avoid_: Card image, original card
 One detected physical card belonging to a Photo, together with its derived images and recognition state. It stays the same Business Card even when its image is later replaced by a Card Retake, so the Photo it belongs to records where the card was first found rather than where its current image came from.
 _Avoid_: Contact, scan
 
+**Extractable Business Card**:
+A card-shaped physical object in a Photo whose four corners are inside the image and whose outline a human reviewer can identify. Its side, reading orientation and text legibility do not affect eligibility; an object with any off-frame or indeterminate corner is not extractable.
+_Avoid_: Readable card, front side, partial card
+
 **Contact**:
 The editable, structured information extracted from one Business Card; it becomes registered only after confirmation.
 _Avoid_: Business card data, person
@@ -25,20 +29,36 @@ OCR text blocks and structured-field candidates derived from a Business Card, wh
 _Avoid_: Contact, final result
 
 **Best-effort Recognition**:
-Recognition that queues every detected Business Card from a Photo without rejecting it solely for the number of cards. Eight cards is the quality target; larger sets may take longer or need more review. Card Detection still caps how many candidates one Photo may yield, so a Photo crowded well beyond the target is recognised only in part.
+Recognition that queues every detected Business Card from a Photo without rejecting it solely for the number of cards. Twelve cards is the Card Detection and Card Extraction guarantee; larger sets may take longer, be extracted only in part or need more review. Card Detection still caps how many candidates one Photo may yield as a cost safety valve.
 _Avoid_: Maximum-card limit, batch rejection
 
+**Extraction Capacity**:
+A Photo containing one to twelve Extractable Business Cards is within the guaranteed range of Card Detection and Card Extraction and must yield exactly one Business Card per physical object. A Photo containing thirteen or more is processed on a best-effort basis. Extraction Ground Truth itself has no card-count ceiling: a human reviewer records every Extractable Business Card even when the Photo is outside the guaranteed range.
+_Avoid_: Approximate maximum, Recognition limit
+
+**Extraction Ground Truth**:
+The human-reviewed set of Extractable Business Cards in a Photo and the four source-image corners of each one.
+_Avoid_: Detector output, estimated corners
+
+**Extraction Acceptance**:
+A Photo passes extraction evaluation only when its detected count exactly matches its Extraction Ground Truth and every matched quadrilateral has an intersection-over-union of at least 0.90. Results are assessed per Business Card rather than accepted by an average score.
+_Avoid_: Visual spot check, average accuracy
+
 **Detection Failure**:
-The outcome in which no Business Card candidate is found in a Photo. The whole Photo then becomes a single low-confidence Business Card rather than ending the attempt, because a single card filling the frame leaves no detectable outline. The user is asked to retake the Photo only when that candidate cannot be recognised either.
+The outcome in which no Extractable Business Card candidate is found in a Photo. It creates no Business Card or Card Extraction output; the user may retake the Photo or supply the missing card's four corners manually.
 _Avoid_: OCR failure, unreadable card
 
 **Manual Card Addition**:
-A user-created Business Card in a Photo where at least one card was detected automatically. The user supplies its four corners so it can be perspective-corrected and immediately queued for independent recognition.
+A user-created Business Card whose four corners are supplied by the user after Card Detection missed it, including after Detection Failure. It is perspective-corrected and immediately queued for independent recognition.
 _Avoid_: Retaking a photo, rectangular crop
 
 **Card Detection**:
-The process that identifies Business Card candidates and their four corners in a Photo, using local image contours only. Each candidate is a rotated rectangle or a four-point approximation of one contour, kept when its proportion and size are card-like. A candidate largely contained in a larger one is treated as the same physical card and dropped, and the number of candidates is capped as a cost safety valve. Corners are ordered clockwise from the top-left, and candidates are presented top row first, left to right within a row.
+The process that identifies every Extractable Business Card in a Photo and locates its four source-image corners. Within Extraction Capacity it yields exactly one candidate per physical card; candidates are presented top row first and left to right within a row.
 _Avoid_: OCR, rectangular cropping
+
+**Card Extraction**:
+The creation of one perspective-corrected image for each detected physical Business Card from its four corners. It preserves the photographed reading orientation and excludes Reading Orientation and OCR.
+_Avoid_: Rectangular crop, orientation correction, recognition
 
 **Reading Orientation**:
 The rotation of 0, 90, 180, or 270 degrees that presents the printed content of a perspective-corrected Business Card upright for recognition. It defaults to 0 degrees, i.e. however the card was photographed, and is never guessed automatically. The user can correct it in 90-degree steps, previewing before it is committed and re-recognised; a corrected orientation is read as given, never re-derived. The orientation-corrected image is retained separately from the perspective-corrected image.

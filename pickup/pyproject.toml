@@ -1,0 +1,21 @@
+[tool.poetry]
+name = "bcman-card-pickup"
+version = "0.1.0"
+description = "Standalone business-card detection and perspective extraction evaluator"
+authors = ["BCMan"]
+package-mode = false
+
+[tool.poetry.dependencies]
+python = "^3.11"
+numpy = "^2.0"
+opencv-python-headless = "^4.10.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3.0"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
