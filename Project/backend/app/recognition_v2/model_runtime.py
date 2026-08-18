@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 import sys
+import threading
 from importlib.metadata import version
 from pathlib import Path
 from typing import Iterable
@@ -230,6 +231,11 @@ class PaddleModels:
         self._detection = None
         self._mobile_recognition = None
         self._server_recognition = None
+        # Paddleの推論エンジンはスレッドセーフではない。process_photo_v2は複数カードを
+        # asyncio.to_thread経由で同時実行するため、ロック無しだと別スレッドから同じ
+        # predictorへ同時にpredict()が飛び、ネイティブ側でSIGSEGVする
+        # （2026-08-18、本番の実クラッシュで確認）。全呼び出しをここで直列化する。
+        self._lock = threading.Lock()
 
     def _path(self, key: str) -> Path:
         if key not in self._paths:
@@ -282,7 +288,8 @@ class PaddleModels:
         return current
 
     def classify(self, images: list[np.ndarray]) -> list[dict]:
-        results = self.orientation_model().predict(images, batch_size=len(images))
+        with self._lock:
+            results = self.orientation_model().predict(images, batch_size=len(images))
         predictions = []
         for result in results:
             payload = _payload(result)
@@ -296,7 +303,8 @@ class PaddleModels:
         return predictions
 
     def detect(self, image: np.ndarray) -> list[dict]:
-        result = self.detection_model().predict(image, batch_size=1)[0]
+        with self._lock:
+            result = self.detection_model().predict(image, batch_size=1)[0]
         payload = _payload(result)
         polygons = payload.get("dt_polys") or []
         scores = payload.get("dt_scores") or []
@@ -317,9 +325,10 @@ class PaddleModels:
     ) -> list[dict]:
         if not images:
             return []
-        results = self.recognition_model(server=server).predict(
-            images, batch_size=min(batch_size, len(images))
-        )
+        with self._lock:
+            results = self.recognition_model(server=server).predict(
+                images, batch_size=min(batch_size, len(images))
+            )
         recognized = []
         for result in results:
             payload = _payload(result)
