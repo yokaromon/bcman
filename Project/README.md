@@ -28,9 +28,20 @@ poetry run python -m app.cli create-org --name "会社名" --group "一般" --ad
 写真ごとに明示的にopt-inした新規写真だけです。既存の名刺は再処理されず、V1がロールバック経路
 として並行稼働し続けます。
 
+### ⚠️ Python 3.11 が必須（本番サーバも要変更）
+
+V2は **Python 3.11** でしか動きません。3.12以降は venv に `setuptools` が同梱されなくなり、
+paddle が import 時に落ちます。加えて pickup での受け入れ評価（向き256/256カード）は 3.11 で
+測っており、別minorは未評価の構成になります。`pyproject.toml` で `>=3.11,<3.12` に固定し、
+起動時にも `verify_runtime_versions()` が Python の minor まで照合して不一致なら止めます。
+
+**本番(CT113)の Python が 3.11 でない場合、V2を有効化する前にサーバ側の入れ替えが必要です。**
+V1はこの制約を受けないため、3.11化が済むまではフラグをOFFのまま運用してください。
+
 有効化の手順（`backend` ディレクトリで実行）:
 
 ```
+poetry env use /path/to/python3.11                               # 3.11以外のvenvだと起動時に落ちる
 poetry install                                                   # paddlepaddle等のV2依存を導入
 poetry run python -m app.recognition_v2.provision_models --verify-only   # 同梱モデルのSHA-256検証
 ```

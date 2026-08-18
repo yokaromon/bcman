@@ -6,7 +6,10 @@ authors = ["BCMan"]
 package-mode = false
 
 [tool.poetry.dependencies]
-python = "^3.11"
+# pickup での受け入れ評価（向き256/256カード）は Python 3.11 で測っており、別minorは
+# 未評価の構成になる。Recognition Release の一部として上限まで固定する
+# （app/recognition_v2/model_manifest.json、verify_runtime_versions()）。
+python = ">=3.11,<3.12"
 fastapi = "^0.115.0"
 uvicorn = {extras = ["standard"], version = "^0.30.0"}
 sqlalchemy = "^2.0.0"
@@ -22,9 +25,19 @@ qrcode = "^7.4.2"
 # 版が動くと Recognition Release が別物になるため、範囲指定ではなく完全固定する。
 numpy = "^2.0"
 jsonschema = "4.25.1"
+# poetry/virtualenv が作るvenvには同梱されない。paddleがimport時に必要とするため明示する
+# （setuptools無しだと `ModuleNotFoundError: No module named 'setuptools'` でimportが落ちる）
+setuptools = "^75.0"
 paddlepaddle = {version = "3.0.0", source = "paddle-cpu"}
 paddleocr = "3.0.3"
-paddlex = {version = "3.0.3", extras = ["ocr"]}
+# 向き分類器 DocImgOrientationClassification のimportだけでもpaddlexは ie/multimodal 側の
+# モジュールを経由し langchain.docstore を要求する（extras=["ocr"]だけでは
+# ModuleNotFoundError: No module named 'langchain.docstore' で落ちることを実機確認した）。
+# pickup/pyproject.toml が検証済みの構成に合わせ、同じextras・同じlangchain一式を入れる。
+paddlex = {version = "3.0.3", extras = ["ie", "multimodal", "ocr"]}
+langchain = "0.3.30"
+langchain-community = "0.3.31"
+langchain-openai = "0.3.35"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.0"

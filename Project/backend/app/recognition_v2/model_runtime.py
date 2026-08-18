@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import sys
 from importlib.metadata import version
 from pathlib import Path
 from typing import Iterable
@@ -138,19 +139,25 @@ def configure_offline_paddle_environment() -> Path:
 
 
 def verify_runtime_versions(manifest: dict) -> None:
+    """Recognition Releaseが検証されたランタイムと一致することを確認する。
+
+    Pythonのminorまで見るのは、pickupでの受け入れ評価（向き256/256カード）が特定の
+    Python上で測られているため。別minorは未評価の構成であり、CONTEXT.mdのRecognition
+    Releaseでは新しい候補として再評価が要る。ランタイムを更新するときはmanifestの
+    runtimeも一緒に更新し、その構成で評価をやり直すこと。"""
     expected = manifest["runtime"]
-    packages = {
-        "paddlepaddle": "paddlepaddle",
-        "paddleocr": "paddleocr",
-        "paddlex": "paddlex",
-    }
     problems = []
-    for key, package in packages.items():
+    actual_python = f"{sys.version_info.major}.{sys.version_info.minor}"
+    if actual_python != expected["python"]:
+        problems.append(f"python: expected={expected['python']} actual={actual_python}")
+    for package in ("paddlepaddle", "paddleocr", "paddlex"):
         actual = version(package)
-        if actual != expected[key]:
-            problems.append(f"{package}: expected={expected[key]} actual={actual}")
+        if actual != expected[package]:
+            problems.append(f"{package}: expected={expected[package]} actual={actual}")
     if problems:
-        raise ModelConfigurationError("Paddle runtime版が一致しません: " + "; ".join(problems))
+        raise ModelConfigurationError(
+            "検証済みランタイムと一致しません: " + "; ".join(problems)
+        )
 
 
 def verify_model_files(
