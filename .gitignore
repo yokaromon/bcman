@@ -34,18 +34,22 @@ pickup/holdout_output/
 pickup/holdout_picture/
 # 実写真から作った成果物一式。zipにはpicture/とGT（実名・電話番号・住所）が丸ごと入る
 pickup.zip
-# Recognition Pipeline V2 の向きモデル(6.6MB)はGitに入れる。PaddleOCR公式のApache-2.0
-# 事前学習済み分類器で、この案件の名刺は含まない。本番から取得元CDNへ到達できなくても
-# デプロイできるようにするため、Recognition Releaseの一部として固定世代を追跡する。
+# Recognition Pipeline V2 の固定モデル一式はGitに入れる。すべてPaddleOCR公式の
+# Apache-2.0事前学習済みモデルで、この案件の名刺は含まない。本番から取得元CDNへ
+# 到達できなくてもデプロイできるようにするため、Recognition Releaseの一部として
+# 固定世代を追跡する（.gitattributesで-text指定、CRLF変換による破損を防ぐ）。
 # provision_models.py は取得だけでなく --verify-only での検証にも使う。
 Project/backend/models_v2/*
 !Project/backend/models_v2/PP-LCNet_x1_0_doc_ori_infer/
-Project/backend/models_v2/PP-LCNet_x1_0_doc_ori_infer/*
-!Project/backend/models_v2/PP-LCNet_x1_0_doc_ori_infer/config.json
-!Project/backend/models_v2/PP-LCNet_x1_0_doc_ori_infer/inference.json
-!Project/backend/models_v2/PP-LCNet_x1_0_doc_ori_infer/inference.pdiparams
-!Project/backend/models_v2/PP-LCNet_x1_0_doc_ori_infer/inference.yml
-!Project/backend/models_v2/PP-LCNet_x1_0_doc_ori_infer/README.md
+!Project/backend/models_v2/PP-OCRv5_server_det_infer/
+!Project/backend/models_v2/PP-OCRv5_mobile_rec_infer/
+!Project/backend/models_v2/PP-OCRv5_server_rec_infer/
+Project/backend/models_v2/*/*
+!Project/backend/models_v2/*/config.json
+!Project/backend/models_v2/*/inference.json
+!Project/backend/models_v2/*/inference.pdiparams
+!Project/backend/models_v2/*/inference.yml
+!Project/backend/models_v2/*/README.md
 Project/backend/.paddlex-cache/
 
 # 画像は既定で追跡しない。検証に使う名刺の実写真は実在する個人情報を含み、

@@ -210,10 +210,11 @@ def _payload(result: object) -> dict:
 
 
 class PaddleModels:
-    """固定済みPaddleモデル（向き分類器のみ）を1プロセス内で遅延生成して再利用する。
+    """固定済みPaddleモデルを1プロセス内で遅延生成して再利用する（pickup/model_runtime.py と同じ）。
 
-    pickup/model_runtime.py のトリム版。text_detection/recognitionモデル
-    （174MB、ローカルOCR診断専用）は本番では使わないため含めない。"""
+    向き分類器に加え、Contact構造化のalignment・向き判定のuncertainフォールバック
+    （可読性スコア）に使うtext_detection/recognitionモデルも持つ。pickupの実際に
+    検証されたパイプラインと同じ構成に揃えるため（2026-08-18、精度低下の原因調査で判明）。"""
 
     def __init__(
         self,
@@ -226,6 +227,9 @@ class PaddleModels:
         self.model_root = model_root.resolve()
         self._paths: dict[str, Path] = {}
         self._orientation = None
+        self._detection = None
+        self._mobile_recognition = None
+        self._server_recognition = None
 
     def _path(self, key: str) -> Path:
         if key not in self._paths:
@@ -249,6 +253,34 @@ class PaddleModels:
             )
         return self._orientation
 
+    def detection_model(self):
+        if self._detection is None:
+            from paddleocr import TextDetection
+
+            spec = self.manifest["models"]["text_detection"]
+            self._detection = TextDetection(
+                model_name=spec["model_name"],
+                model_dir=str(self._path("text_detection")),
+                **self._common(),
+            )
+        return self._detection
+
+    def recognition_model(self, server: bool = False):
+        attribute = "_server_recognition" if server else "_mobile_recognition"
+        current = getattr(self, attribute)
+        if current is None:
+            from paddleocr import TextRecognition
+
+            key = "server_recognition" if server else "mobile_recognition"
+            spec = self.manifest["models"][key]
+            current = TextRecognition(
+                model_name=spec["model_name"],
+                model_dir=str(self._path(key)),
+                **self._common(),
+            )
+            setattr(self, attribute, current)
+        return current
+
     def classify(self, images: list[np.ndarray]) -> list[dict]:
         results = self.orientation_model().predict(images, batch_size=len(images))
         predictions = []
@@ -262,3 +294,39 @@ class PaddleModels:
                 {"label": int(labels[0]), "score": float(scores[0])}
             )
         return predictions
+
+    def detect(self, image: np.ndarray) -> list[dict]:
+        result = self.detection_model().predict(image, batch_size=1)[0]
+        payload = _payload(result)
+        polygons = payload.get("dt_polys") or []
+        scores = payload.get("dt_scores") or []
+        return [
+            {
+                "polygon": np.float32(polygon).reshape(-1, 2),
+                "score": float(scores[index]) if index < len(scores) else None,
+            }
+            for index, polygon in enumerate(polygons)
+        ]
+
+    def recognize(
+        self,
+        images: list[np.ndarray],
+        *,
+        server: bool = False,
+        batch_size: int = 8,
+    ) -> list[dict]:
+        if not images:
+            return []
+        results = self.recognition_model(server=server).predict(
+            images, batch_size=min(batch_size, len(images))
+        )
+        recognized = []
+        for result in results:
+            payload = _payload(result)
+            recognized.append(
+                {
+                    "text": str(payload.get("rec_text") or ""),
+                    "score": float(payload.get("rec_score") or 0.0),
+                }
+            )
+        return recognized

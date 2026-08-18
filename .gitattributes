@@ -1,0 +1,5 @@
+# Recognition Pipeline V2 の固定モデル一式。SHA-256で検証するpinned artifactなので、
+# core.autocrlf等によるLF/CRLF変換を一切受けさせない（受けると検証が壊れる）。
+# 2026-08-18: config.json/inference.yml がWindowsのgit checkoutでCRLF化され、
+# 検証済みSHA-256と不一致になる事故があった。
+Project/backend/models_v2/** -text

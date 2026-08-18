@@ -50,11 +50,21 @@ poetry run python -m app.recognition_v2.provision_models --verify-only   # 同�
 撮影画面に「新しい読み取り(V2)を試す」チェックボックスが出ます。チェックを入れて撮った写真だけが
 V2で処理されます。フラグがOFFの間、または管理者以外の要求は、サーバー側で無条件にV1へ落とされます。
 
-向きモデル（`backend/models_v2/PP-LCNet_x1_0_doc_ori_infer/`、6.6MB）はリポジトリに同梱してあります。
-PaddleOCR公式のApache-2.0事前学習済み分類器で、この案件の名刺は含みません。取得元CDNへ到達できない
-環境でもデプロイできるよう、Recognition Releaseの一部として固定世代を追跡しています。別世代へ
-差し替えるときだけ `provision_models.py` を `--verify-only` なしで実行します（実行時ダウンロードは
-一切行いません）。
+モデル一式（`backend/models_v2/`、向き分類器6.6MB＋文字検出・認識3種193MB、計約200MB）は
+リポジトリに同梱してあります。すべてPaddleOCR公式のApache-2.0事前学習済みモデルで、この案件の
+名刺は含みません。取得元CDNへ到達できない環境でもデプロイできるよう、Recognition Releaseの
+一部として固定世代を追跡しています。別世代へ差し替えるときだけ `provision_models.py` を
+`--verify-only` なしで実行します（実行時ダウンロードは一切行いません）。
+
+文字検出・認識モデルは、Contact構造化の根拠証拠（alignment）と、向き分類器がuncertainのときの
+可読性フォールバックに使います（2026-08-18、alignment無しで本番投入した結果pickupの検証結果より
+精度が低くなったため追加移植。詳細は`app/recognition_v2/pipeline.py`のコメント参照）。
+
+**Windowsで作業する場合の注意**: `.gitattributes` でモデル一式を `-text` 指定しています。
+指定前は `core.autocrlf=true` の環境で `git checkout` するたびに `config.json`/`inference.yml`
+がCRLF化され、SHA-256検証が壊れる事故がありました（Linux側は autocrlf 無効のため無事）。
+モデルファイルの差分が出た場合は、まず `.gitattributes` が効いているか
+(`git check-attr text -- backend/models_v2/.../config.json` で `text: unset` と出るか)を疑うこと。
 
 PaddleXは日本語フォントを要求するため、Linuxでは `fonts-noto-cjk` 等を導入するか、
 `BCMAN_V2_FONT_PATH` へ既存TTF/TTCの絶対パスを設定してください。

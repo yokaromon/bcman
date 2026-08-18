@@ -21,9 +21,11 @@ from ..models import BusinessCard, Contact, OCRResult, Photo, ProcessingHistory
 from ..search_text import refresh_search_text
 from ..settings import settings
 from . import detector
+from .alignment import align_ocr_lines
 from .model_runtime import PaddleModels
 from .orientation import OrientationEngine
 from .recognition_contract import CONTACT_FIELDS, RecognitionContractError, enrich_contact
+from .text_regions import LocalTextPipeline
 from .ykr_client import ManagedRecognitionClient, ManagedRecognitionError, YkrSettings
 
 ORIENTATION_MODEL_NAME = "PP-LCNet_x1_0_doc_ori"
@@ -43,15 +45,24 @@ REVIEW_FLAG_MESSAGES = {
     "invalid_website_format": "URLを確認してください",
 }
 
-# 向きモデルはプロセス内で1回だけロードして使い回す（pickup/model_runtime.py と同じ遅延生成）。
+# Paddleモデルとローカル文字領域パイプラインはプロセス内で1回だけロードして使い回す
+# （pickup/model_runtime.py と同じ遅延生成）。
 _models: PaddleModels | None = None
+_text_pipeline: LocalTextPipeline | None = None
 
 
-def _orientation_models() -> PaddleModels:
+def _shared_models() -> PaddleModels:
     global _models
     if _models is None:
         _models = PaddleModels()
     return _models
+
+
+def _local_text_pipeline() -> LocalTextPipeline:
+    global _text_pipeline
+    if _text_pipeline is None:
+        _text_pipeline = LocalTextPipeline(_shared_models())
+    return _text_pipeline
 
 
 def _ykr_client() -> ManagedRecognitionClient:
@@ -90,10 +101,14 @@ def _write_card_v2(photo: Photo, db: Session, image, detection: detector.Detecti
 
 def _auto_orient_v2(card: BusinessCard, db: Session) -> None:
     """Card Extraction直後に1回だけ向きを自動提案する（CONTEXT.md Reading Orientation）。
-    確定できなければ撮影時のまま(rotation=0)残し、Orientation Decisionをuncertainにする。"""
+    確定できなければ撮影時のまま(rotation=0)残し、Orientation Decisionをuncertainにする。
+    分類器の自己整合性だけで確定できないときは、pickupと同じくローカルOCRの可読性スコアで
+    4方向を比較するフォールバックへ進む（readability_scorer）。"""
     image = detector.read_image(Path(card.corrected_image_path))
-    engine = OrientationEngine(_orientation_models())
-    oriented_image, document = engine.analyze(image)
+    engine = OrientationEngine(_shared_models())
+    oriented_image, document = engine.analyze(
+        image, readability_scorer=_local_text_pipeline().readability
+    )
     rotation = document["rotation_applied"]
     if rotation:
         target = Path(card.corrected_image_path).parent / f"oriented-{rotation}-auto.jpg"
@@ -152,20 +167,32 @@ def _apply_contact_fields(contact: Contact, enriched_fields: dict) -> dict:
 
 
 async def run_ocr_v2(card: BusinessCard, db: Session) -> None:
-    """向きは探索せず、現在確定している向き(自動提案またはユーザー訂正済み)でOCRする。"""
+    """向きは探索せず、現在確定している向き(自動提案またはユーザー訂正済み)でOCRする。
+
+    ykr呼び出しの前にローカルPaddleOCRの文字領域検出も行い、ykrの文字起こしと突き合わせた
+    alignment（対応証拠）を作る。これはprompts/v2/contact.txtがContact構造化の根拠として
+    前提にしている入力で、alignment無しではpickupで検証した精度が出ない（2026-08-18判明）。"""
     card.status = "ocr_processing"; db.commit()
-    client = _ykr_client()
     image_path = Path(card.oriented_image_path or card.corrected_image_path)
+    image = detector.read_image(image_path)
+    local_ocr = await asyncio.to_thread(_local_text_pipeline().process, image, server=True)
+    client = _ykr_client()
     try:
         stage = await asyncio.to_thread(client.run_ocr, image_path)
     except (ManagedRecognitionError, RecognitionContractError) as exc:
         raise ValueError(str(exc)) from exc
+    alignment = align_ocr_lines(local_ocr, stage.document)
     raw_text = "\n".join(line.get("text") or "" for line in stage.document["lines"])
-    db.add(OCRResult(card_id=card.id, engine=OCR_ENGINE, engine_version=stage.model, raw_text=raw_text, raw_json=stage.document))
+    raw_json = {**stage.document, "alignment": alignment}
+    db.add(OCRResult(card_id=card.id, engine=OCR_ENGINE, engine_version=stage.model, raw_text=raw_text, raw_json=raw_json))
     db.add(ProcessingHistory(
         card_id=card.id, process_type="ocr", engine=OCR_ENGINE, version=stage.model,
         input_json={"prompt_version": stage.prompt_version, "orientation": card.orientation, "attempts": stage.attempts},
-        output_json=stage.document,
+        output_json=raw_json,
+    ))
+    db.add(ProcessingHistory(
+        card_id=card.id, process_type="ocr_local_diagnostic", engine="pickup-text-regions-v2",
+        version="PP-OCRv5_server_det+PP-OCRv5_server_rec", input_json={}, output_json=local_ocr,
     ))
     card.status = "ocr_completed"; db.commit()
 
@@ -174,12 +201,14 @@ async def structure_v2(card: BusinessCard, db: Session) -> None:
     result = db.query(OCRResult).filter_by(card_id=card.id).order_by(OCRResult.created_at.desc()).first()
     if not result: raise ValueError("先にOCRを実行してください")
     card.status = "llm_processing"; db.commit()
+    alignment = result.raw_json.get("alignment") or []
+    ocr_document = {"schema_version": 1, "lines": result.raw_json["lines"]}
     client = _ykr_client()
     try:
-        stage = await asyncio.to_thread(client.structure_contact, result.raw_json, None)
+        stage = await asyncio.to_thread(client.structure_contact, ocr_document, alignment)
     except (ManagedRecognitionError, RecognitionContractError) as exc:
         raise ValueError(str(exc)) from exc
-    enriched = enrich_contact(stage.document, result.raw_json, alignment=None)
+    enriched = enrich_contact(stage.document, ocr_document, alignment=alignment)
     contact = db.query(Contact).filter_by(card_id=card.id).first() or Contact(card_id=card.id)
     contact.review_flags = _apply_contact_fields(contact, enriched["fields"])
     refresh_search_text(contact)
