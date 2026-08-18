@@ -10,9 +10,7 @@ type Props = {
   groups: Group[];
   groupId: string;
   onGroupChange: (groupId: string) => void;
-  recognitionV2Available: boolean;
-  useRecognitionV2: boolean;
-  onRecognitionV2Change: (value: boolean) => void;
+  recognitionV2Active: boolean;
 };
 
 export function CaptureScreen({
@@ -24,9 +22,7 @@ export function CaptureScreen({
   groups,
   groupId,
   onGroupChange,
-  recognitionV2Available,
-  useRecognitionV2,
-  onRecognitionV2Change,
+  recognitionV2Active,
 }: Props) {
   const cameraInput = useRef<HTMLInputElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -78,16 +74,7 @@ export function CaptureScreen({
         </label>
       )}
 
-      {recognitionV2Available && (
-        <label className="check-row">
-          <input
-            type="checkbox"
-            checked={useRecognitionV2}
-            onChange={(event) => onRecognitionV2Change(event.target.checked)}
-          />
-          新しい読み取り(V2)を試す
-        </label>
-      )}
+      {recognitionV2Active && <p className="hint">新しい読み取り(V2)で処理されます</p>}
 
       <input
         ref={cameraInput}

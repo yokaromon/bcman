@@ -24,9 +24,10 @@ poetry run python -m app.cli create-org --name "会社名" --group "一般" --ad
 ## Recognition Pipeline V2（試験運用中・既定OFF）
 
 `pickup/` で検証した「切り抜き→ローカル向き判定→ykrによる構造化OCR」を `backend/app/recognition_v2/`
-に移植したものです。ADR 0019 のとおり **既定OFF** で、有効にしても適用されるのは管理者が
-写真ごとに明示的にopt-inした新規写真だけです。既存の名刺は再処理されず、V1がロールバック経路
-として並行稼働し続けます。
+に移植したものです。**既定OFF**で、`.env`の`RECOGNITION_PIPELINE_V2_ENABLED`だけがV1/V2を分ける
+唯一の分岐点です（2026-08-18、写真ごとのopt-inチェックボックスは撤去し一本化）。フラグONの間は
+**新規写真すべて**がV2で処理されます。既存の名刺は再処理されず、フラグをOFFへ戻せばV1へ即座に
+ロールバックできます（V1のコードパス自体は無変更のまま残っている）。
 
 ### ⚠️ Python 3.11 が必須（本番サーバも要変更）
 
@@ -46,9 +47,9 @@ poetry install                                                   # paddlepaddle�
 poetry run python -m app.recognition_v2.provision_models --verify-only   # 同梱モデルのSHA-256検証
 ```
 
-そのうえで `.env` に `RECOGNITION_PIPELINE_V2_ENABLED=true` を設定して再起動すると、管理者の
-撮影画面に「新しい読み取り(V2)を試す」チェックボックスが出ます。チェックを入れて撮った写真だけが
-V2で処理されます。フラグがOFFの間、または管理者以外の要求は、サーバー側で無条件にV1へ落とされます。
+そのうえで `.env` に `RECOGNITION_PIPELINE_V2_ENABLED=true` を設定して再起動すると、**以後の
+新規写真は全員分・全件がV2で処理されます**。撮影画面には現在V2で処理される旨の案内だけが出ます
+（選べるトグルはありません）。元に戻すときは `.env` を `false` に戻して再起動するだけです。
 
 モデル一式（`backend/models_v2/`、向き分類器6.6MB＋文字検出・認識3種193MB、計約200MB）は
 リポジトリに同梱してあります。すべてPaddleOCR公式のApache-2.0事前学習済みモデルで、この案件の

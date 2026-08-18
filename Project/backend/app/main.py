@@ -133,7 +133,7 @@ def logout(request: Request, response: Response, db: Session=Depends(get_db)):
 def me(db: Session=Depends(get_db), user: User=Depends(current_user)):
     org = db.get(Organization, user.organization_id)
     groups = db.query(Group).join(UserGroup, UserGroup.group_id == Group.id).filter(UserGroup.user_id == user.id).all()
-    return {"id":user.id,"username":user.username,"name":user.name,"role":user.role,"organization_id":user.organization_id,"sharing_mode":org.sharing_mode if org else None,"groups":[{"id":g.id,"name":g.name} for g in groups],"recognition_v2_available":settings.recognition_pipeline_v2_enabled and user.role == "admin"}
+    return {"id":user.id,"username":user.username,"name":user.name,"role":user.role,"organization_id":user.organization_id,"sharing_mode":org.sharing_mode if org else None,"groups":[{"id":g.id,"name":g.name} for g in groups],"recognition_v2_active":settings.recognition_pipeline_v2_enabled}
 
 # --- 組織・グループ・ユーザ管理（Organization管理者のみ。Organization自体の新規作成はシェルスクリプトで行う） ---
 
@@ -210,19 +210,19 @@ def revoke_device(org_id: str, device_id: str, db: Session=Depends(get_db), admi
 
 # --- 名刺 ---
 
-def resolve_pipeline_version(requested: str, user: User) -> str:
-    """クライアントの申告は信用せず、V2の条件を満たすときだけ "v2" を許す（docs/adr/0019）。
-    マスタースイッチがOFF、または管理者以外の要求は黙って "v1" に落とす。"""
-    wants_v2 = requested == "v2"
-    allowed = settings.recognition_pipeline_v2_enabled and user.role == "admin"
-    return "v2" if (wants_v2 and allowed) else "v1"
+def resolve_pipeline_version(user: User) -> str:
+    """写真ごとの選択制ではなく、`RECOGNITION_PIPELINE_V2_ENABLED` だけがV1/V2を切り替える
+    唯一の分岐点（2026-08-18、写真ごとのopt-inチェックボックスをやめてこちらに一本化）。
+    フラグONの間は新規写真すべてがV2で処理される。ロールバックはフラグをOFFに戻すだけでよく、
+    既存カードは引き続き再処理しない（docs/adr/0019）。"""
+    return "v2" if settings.recognition_pipeline_v2_enabled else "v1"
 
 @app.post("/api/photos")
-async def upload_photo(group_id: str, pipeline_version: str="v1", file: UploadFile=File(...), db: Session=Depends(get_db), user: User=Depends(current_user)):
+async def upload_photo(group_id: str, file: UploadFile=File(...), db: Session=Depends(get_db), user: User=Depends(current_user)):
     allowed_groups = {g.id for g in db.query(Group).filter_by(organization_id=user.organization_id)} if user.role == "admin" else set(user_group_ids(db, user))
     if group_id not in allowed_groups: raise HTTPException(400, "アップロード先のグループを正しく選択してください")
     if file.content_type not in {"image/jpeg","image/png"}: raise HTTPException(415, "JPEG または PNG のみ対応")
-    photo=Photo(organization_id=user.organization_id, group_id=group_id, original_filename=file.filename or "upload", storage_path="", pipeline_version=resolve_pipeline_version(pipeline_version, user)); db.add(photo); db.flush()
+    photo=Photo(organization_id=user.organization_id, group_id=group_id, original_filename=file.filename or "upload", storage_path="", pipeline_version=resolve_pipeline_version(user)); db.add(photo); db.flush()
     target=settings.storage_dir/"photos"/photo.id; target.mkdir(parents=True); path=target/("original.png" if file.content_type=="image/png" else "original.jpg")
     with path.open("wb") as out: shutil.copyfileobj(file.file, out)
     if path.stat().st_size > settings.max_upload_bytes: path.unlink(); raise HTTPException(413, "20MBを超えています")

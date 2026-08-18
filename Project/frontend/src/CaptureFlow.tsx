@@ -41,8 +41,6 @@ export function CaptureFlow({ user }: { user: Me | null }) {
   const [showCandidates, setShowCandidates] = useState(false);
   // 複数グループに所属する利用者は、撮影のたびにどのグループへ登録するか選ぶ
   const [groupId, setGroupId] = useState(user?.groups[0]?.id ?? '');
-  // Recognition Pipeline V2 の写真単位opt-in（docs/adr/0019）。既定OFF、管理者にだけ出る
-  const [useRecognitionV2, setUseRecognitionV2] = useState(false);
 
   // ポーリングのループ内から参照するため、再レンダリングに巻き込まれない実体を持つ
   const retriedRef = useRef<Set<string>>(new Set());
@@ -70,7 +68,7 @@ export function CaptureFlow({ user }: { user: Me | null }) {
     setPhase('uploading');
     setErrorMessage('');
     try {
-      const uploadedId = await uploadPhoto(groupId, file, useRecognitionV2);
+      const uploadedId = await uploadPhoto(groupId, file);
       await startProcessing(uploadedId);
       setPhotoId(uploadedId);
       setPhase('tracking');
@@ -211,9 +209,7 @@ export function CaptureFlow({ user }: { user: Me | null }) {
         groups={user?.groups ?? []}
         groupId={groupId}
         onGroupChange={setGroupId}
-        recognitionV2Available={Boolean(user?.recognition_v2_available)}
-        useRecognitionV2={useRecognitionV2}
-        onRecognitionV2Change={setUseRecognitionV2}
+        recognitionV2Active={Boolean(user?.recognition_v2_active)}
       />
     );
   }

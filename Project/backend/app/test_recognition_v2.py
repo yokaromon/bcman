@@ -59,17 +59,19 @@ def _member(role="member"):
     return User(role=role, organization_id="org", username="u", name="n", password_hash="", totp_secret="")
 
 
-def test_v2_requires_both_the_master_switch_and_an_admin(monkeypatch):
-    """フラグOFF、または管理者以外の要求は黙ってv1に落とす（クライアント申告を信用しない）。"""
+def test_v2_follows_only_the_master_switch(monkeypatch):
+    """写真ごとのopt-inはやめ、RECOGNITION_PIPELINE_V2_ENABLEDだけがV1/V2を分ける
+    （2026-08-18、opt-inチェックボックスを外したまま検証用にV2を使い続けたいという要望）。
+    ロールに関係なく、フラグの状態だけで決まる。"""
     from app import main
 
     monkeypatch.setattr(main.settings, "recognition_pipeline_v2_enabled", False)
-    assert resolve_pipeline_version("v2", _member("admin")) == "v1"
+    assert resolve_pipeline_version(_member("admin")) == "v1"
+    assert resolve_pipeline_version(_member("member")) == "v1"
 
     monkeypatch.setattr(main.settings, "recognition_pipeline_v2_enabled", True)
-    assert resolve_pipeline_version("v2", _member("member")) == "v1"
-    assert resolve_pipeline_version("v1", _member("admin")) == "v1"
-    assert resolve_pipeline_version("v2", _member("admin")) == "v2"
+    assert resolve_pipeline_version(_member("admin")) == "v2"
+    assert resolve_pipeline_version(_member("member")) == "v2"
 
 
 def _ocr_document(*texts):

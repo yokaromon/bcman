@@ -17,7 +17,7 @@ export type Me = {
   organization_id: string;
   sharing_mode: string;
   groups: Group[];
-  recognition_v2_available: boolean;
+  recognition_v2_active: boolean;
 };
 
 export type LoginResult = { status: 'ok' | 'totp_required' };
@@ -221,12 +221,13 @@ export function fetchPhotos(): Promise<PhotoSummary[]> {
   return request<PhotoSummary[]>('/photos');
 }
 
-export async function uploadPhoto(groupId: string, file: File, useRecognitionV2 = false): Promise<string> {
+export async function uploadPhoto(groupId: string, file: File): Promise<string> {
   const body = new FormData();
   body.append('file', file);
-  const pipeline = useRecognitionV2 ? 'v2' : 'v1';
+  // 認識パイプラインの選択はサーバー側の RECOGNITION_PIPELINE_V2_ENABLED だけで決まる
+  // （2026-08-18、写真ごとのopt-inをやめて一本化）。クライアントからは渡さない。
   const result = await request<{ photo_id: string }>(
-    `/photos?group_id=${encodeURIComponent(groupId)}&pipeline_version=${pipeline}`,
+    `/photos?group_id=${encodeURIComponent(groupId)}`,
     { method: 'POST', body },
   );
   return result.photo_id;
