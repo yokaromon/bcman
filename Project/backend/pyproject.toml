@@ -18,9 +18,21 @@ opencv-python-headless = "^4.10.0"
 bcrypt = "^4.2.0"
 pyotp = "^2.9.0"
 qrcode = "^7.4.2"
+# Recognition Pipeline V2（app/recognition_v2）。pickup で検証したのと同じ固定版に合わせる。
+# 版が動くと Recognition Release が別物になるため、範囲指定ではなく完全固定する。
+numpy = "^2.0"
+jsonschema = "4.25.1"
+paddlepaddle = {version = "3.0.0", source = "paddle-cpu"}
+paddleocr = "3.0.3"
+paddlex = {version = "3.0.3", extras = ["ocr"]}
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.0"
+
+[[tool.poetry.source]]
+name = "paddle-cpu"
+url = "https://www.paddlepaddle.org.cn/packages/stable/cpu/"
+priority = "explicit"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

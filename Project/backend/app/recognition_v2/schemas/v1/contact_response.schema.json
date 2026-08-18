@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bcman.local/schemas/v1/contact_response.schema.json",
+  "title": "BCMan contact response v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "fields"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "fields": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "company_name", "company_name_kana", "department", "position",
+        "person_name", "person_name_kana", "postal_code", "address",
+        "telephone", "fax", "mobile", "email", "website", "notes"
+      ],
+      "properties": {
+        "company_name": {"$ref": "#/$defs/field"},
+        "company_name_kana": {"$ref": "#/$defs/field"},
+        "department": {"$ref": "#/$defs/field"},
+        "position": {"$ref": "#/$defs/field"},
+        "person_name": {"$ref": "#/$defs/field"},
+        "person_name_kana": {"$ref": "#/$defs/field"},
+        "postal_code": {"$ref": "#/$defs/field"},
+        "address": {"$ref": "#/$defs/field"},
+        "telephone": {"$ref": "#/$defs/field"},
+        "fax": {"$ref": "#/$defs/field"},
+        "mobile": {"$ref": "#/$defs/field"},
+        "email": {"$ref": "#/$defs/field"},
+        "website": {"$ref": "#/$defs/field"},
+        "notes": {"$ref": "#/$defs/field"}
+      }
+    }
+  },
+  "$defs": {
+    "field": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state", "display_value", "candidate_value", "source_line_ids"
+      ],
+      "properties": {
+        "state": {"enum": ["present", "absent", "unreadable"]},
+        "display_value": {"type": ["string", "null"]},
+        "candidate_value": {"type": ["string", "null"]},
+        "source_line_ids": {
+          "type": "array",
+          "items": {"type": "string", "pattern": "^line-[0-9]{3,}$"},
+          "uniqueItems": true
+        }
+      }
+    }
+  }
+}

@@ -83,6 +83,9 @@ class Photo(Base):
     width: Mapped[int | None] = mapped_column(Integer, nullable=True)
     height: Mapped[int | None] = mapped_column(Integer, nullable=True)
     status: Mapped[str] = mapped_column(String, default="uploaded")
+    # この写真をどちらの認識パイプラインで処理するか（docs/adr/0019）。既定は "v1"。
+    # 管理者が明示的にopt-inした新規写真だけが "v2" になり、既存の写真は "v1" のまま。
+    pipeline_version: Mapped[str] = mapped_column(String, default="v1")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now)
 
 class BusinessCard(Base):
@@ -93,6 +96,10 @@ class BusinessCard(Base):
     corrected_image_path: Mapped[str] = mapped_column(String)
     oriented_image_path: Mapped[str] = mapped_column(String, default="")
     orientation: Mapped[int] = mapped_column(Integer, default=0)
+    # Orientation Decision（docs/CONTEXT.md）。回転角そのものとは別に、その向きが
+    # auto_confirmed / uncertain / user_confirmed のどれで決まったかを持つ。
+    # V1で作られたカードは空のまま（V1に自動向き判定は無い）。
+    orientation_decision: Mapped[str] = mapped_column(String, default="")
     detection_confidence: Mapped[float] = mapped_column(Float, default=0)
     x: Mapped[int] = mapped_column(Integer, default=0)
     y: Mapped[int] = mapped_column(Integer, default=0)

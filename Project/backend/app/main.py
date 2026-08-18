@@ -45,6 +45,9 @@ def bootstrap():
             card_columns = {row[1] for row in connection.execute(text("PRAGMA table_info(business_cards)"))}
             if "oriented_image_path" not in card_columns: connection.execute(text("ALTER TABLE business_cards ADD COLUMN oriented_image_path VARCHAR DEFAULT ''"))
             if "orientation" not in card_columns: connection.execute(text("ALTER TABLE business_cards ADD COLUMN orientation INTEGER DEFAULT 0"))
+            if "orientation_decision" not in card_columns: connection.execute(text("ALTER TABLE business_cards ADD COLUMN orientation_decision VARCHAR DEFAULT ''"))
+            photo_columns = {row[1] for row in connection.execute(text("PRAGMA table_info(photos)"))}
+            if "pipeline_version" not in photo_columns: connection.execute(text("ALTER TABLE photos ADD COLUMN pipeline_version VARCHAR DEFAULT 'v1'"))
     backfill_search_text()
 
 def backfill_search_text():
@@ -65,6 +68,19 @@ def card_for_user(card_id, db, user):
     card = db.get(BusinessCard, card_id)
     if not card or not visible_photo_query(db, user).filter(Photo.id == card.photo_id).first(): raise HTTPException(404, "名刺が見つかりません")
     return card
+def uses_v2(card: BusinessCard, db: Session) -> bool:
+    """この名刺がV2で作られたかを、由来する写真のpipeline_versionから判定する。
+    V1とV2が同じContactを更新しないよう、再認識も必ず作成時と同じ側で行う（docs/adr/0019）。"""
+    photo = db.get(Photo, card.photo_id)
+    return bool(photo and photo.pipeline_version == "v2")
+async def recognize(card: BusinessCard, db: Session, *, ocr: bool=True, llm: bool=True) -> None:
+    if uses_v2(card, db):
+        from .recognition_v2.pipeline import run_ocr_v2, structure_v2
+        if ocr: await run_ocr_v2(card, db)
+        if llm: await structure_v2(card, db)
+        return
+    if ocr: await run_ocr(card, db)
+    if llm: await structure(card, db)
 def record_audit(db, user, action, target_type, target_id, detail):
     db.add(AuditLog(user_id=user.id, user_name=user.name, action=action, target_type=target_type, target_id=target_id, detail=detail))
 def thumbnail_response(build, cache_control=THUMBNAIL_CACHE_CONTROL):
@@ -117,7 +133,7 @@ def logout(request: Request, response: Response, db: Session=Depends(get_db)):
 def me(db: Session=Depends(get_db), user: User=Depends(current_user)):
     org = db.get(Organization, user.organization_id)
     groups = db.query(Group).join(UserGroup, UserGroup.group_id == Group.id).filter(UserGroup.user_id == user.id).all()
-    return {"id":user.id,"username":user.username,"name":user.name,"role":user.role,"organization_id":user.organization_id,"sharing_mode":org.sharing_mode if org else None,"groups":[{"id":g.id,"name":g.name} for g in groups]}
+    return {"id":user.id,"username":user.username,"name":user.name,"role":user.role,"organization_id":user.organization_id,"sharing_mode":org.sharing_mode if org else None,"groups":[{"id":g.id,"name":g.name} for g in groups],"recognition_v2_available":settings.recognition_pipeline_v2_enabled and user.role == "admin"}
 
 # --- 組織・グループ・ユーザ管理（Organization管理者のみ。Organization自体の新規作成はシェルスクリプトで行う） ---
 
@@ -194,16 +210,23 @@ def revoke_device(org_id: str, device_id: str, db: Session=Depends(get_db), admi
 
 # --- 名刺 ---
 
+def resolve_pipeline_version(requested: str, user: User) -> str:
+    """クライアントの申告は信用せず、V2の条件を満たすときだけ "v2" を許す（docs/adr/0019）。
+    マスタースイッチがOFF、または管理者以外の要求は黙って "v1" に落とす。"""
+    wants_v2 = requested == "v2"
+    allowed = settings.recognition_pipeline_v2_enabled and user.role == "admin"
+    return "v2" if (wants_v2 and allowed) else "v1"
+
 @app.post("/api/photos")
-async def upload_photo(group_id: str, file: UploadFile=File(...), db: Session=Depends(get_db), user: User=Depends(current_user)):
+async def upload_photo(group_id: str, pipeline_version: str="v1", file: UploadFile=File(...), db: Session=Depends(get_db), user: User=Depends(current_user)):
     allowed_groups = {g.id for g in db.query(Group).filter_by(organization_id=user.organization_id)} if user.role == "admin" else set(user_group_ids(db, user))
     if group_id not in allowed_groups: raise HTTPException(400, "アップロード先のグループを正しく選択してください")
     if file.content_type not in {"image/jpeg","image/png"}: raise HTTPException(415, "JPEG または PNG のみ対応")
-    photo=Photo(organization_id=user.organization_id, group_id=group_id, original_filename=file.filename or "upload", storage_path=""); db.add(photo); db.flush()
+    photo=Photo(organization_id=user.organization_id, group_id=group_id, original_filename=file.filename or "upload", storage_path="", pipeline_version=resolve_pipeline_version(pipeline_version, user)); db.add(photo); db.flush()
     target=settings.storage_dir/"photos"/photo.id; target.mkdir(parents=True); path=target/("original.png" if file.content_type=="image/png" else "original.jpg")
     with path.open("wb") as out: shutil.copyfileobj(file.file, out)
     if path.stat().st_size > settings.max_upload_bytes: path.unlink(); raise HTTPException(413, "20MBを超えています")
-    photo.storage_path=str(path); photo.width, photo.height=image_size(path); db.commit(); return {"photo_id":photo.id,"status":"uploaded"}
+    photo.storage_path=str(path); photo.width, photo.height=image_size(path); db.commit(); return {"photo_id":photo.id,"status":"uploaded","pipeline_version":photo.pipeline_version}
 @app.get("/api/photos")
 def list_photos(db: Session=Depends(get_db), user: User=Depends(current_user)):
     photos=visible_photo_query(db,user).order_by(Photo.created_at.desc()).all(); ids=[p.id for p in photos]
@@ -230,9 +253,20 @@ def add_card(photo_id: str, body: ManualCardInput, tasks: BackgroundTasks, db: S
     photo=visible_photo_query(db,user).filter_by(id=photo_id).first()
     if not photo: raise HTTPException(404,"写真が見つかりません")
     if not photo.storage_path: raise HTTPException(409,"撮影原本は削除済みです")
-    try: card = add_manual_card(photo, db, body.corners)
+    use_v2 = photo.pipeline_version == "v2"
+    try:
+        if use_v2:
+            from .recognition_v2.pipeline import add_manual_card_v2
+            card = add_manual_card_v2(photo, db, body.corners)
+        else:
+            card = add_manual_card(photo, db, body.corners)
     except ValueError as exc: raise HTTPException(400, str(exc)) from exc
-    async def job(): await process_card(card.id)
+    async def job():
+        if use_v2:
+            from .recognition_v2.pipeline import process_card_v2
+            await process_card_v2(card.id)
+        else:
+            await process_card(card.id)
     tasks.add_task(job)
     return {"id":card.id,"status":card.status}
 @app.post("/api/photos/{photo_id}/complete-review")
@@ -259,10 +293,19 @@ def confirm_cards(photo_id: str, body: BatchConfirmInput, db: Session=Depends(ge
     db.commit(); return {"confirmed_count":len(cards)}
 @app.post("/api/photos/{photo_id}/process")
 def process(photo_id: str, tasks: BackgroundTasks, db: Session=Depends(get_db), user: User=Depends(current_user)):
-    if not visible_photo_query(db,user).filter_by(id=photo_id).first(): raise HTTPException(404,"写真が見つかりません")
+    photo=visible_photo_query(db,user).filter_by(id=photo_id).first()
+    if not photo: raise HTTPException(404,"写真が見つかりません")
+    # 認識パイプラインは写真ごとに固定（アップロード時に確定済み）。V1とV2が同じ写真を
+    # 二重に処理することはない（docs/adr/0019）。
+    use_v2 = photo.pipeline_version == "v2"
     async def job():
-        with SessionLocal() as session: await process_photo(photo_id,session)
-    tasks.add_task(job); return {"photo_id":photo_id,"status":"processing"}
+        with SessionLocal() as session:
+            if use_v2:
+                from .recognition_v2.pipeline import process_photo_v2
+                await process_photo_v2(photo_id,session)
+            else:
+                await process_photo(photo_id,session)
+    tasks.add_task(job); return {"photo_id":photo_id,"status":"processing","pipeline_version":photo.pipeline_version}
 @app.get("/api/photos/{photo_id}/cards")
 def cards(photo_id: str, db: Session=Depends(get_db), user: User=Depends(current_user)):
     if not visible_photo_query(db,user).filter_by(id=photo_id).first(): raise HTTPException(404,"写真が見つかりません")
@@ -277,7 +320,7 @@ def list_contacts(q: str="", limit: int=LEDGER_PAGE_SIZE, offset: int=0, db: Ses
 def card(card_id: str, db: Session=Depends(get_db), user: User=Depends(current_user)):
     c=card_for_user(card_id,db,user); contact=db.query(Contact).filter_by(card_id=c.id).first(); ocr=db.query(OCRResult).filter_by(card_id=c.id).order_by(OCRResult.created_at.desc()).first()
     revision=card_image_revision(c)
-    return {"id":c.id,"status":c.status,"image_url":f"/api/cards/{c.id}/image?v={revision}","image_revision":revision,"contact":{k:getattr(contact,k) for k in Contact.__table__.columns.keys()} if contact else None,"ocr_text":ocr.raw_text if ocr else "","review_flags":contact.review_flags if contact else {},"orientation":c.orientation}
+    return {"id":c.id,"status":c.status,"image_url":f"/api/cards/{c.id}/image?v={revision}","image_revision":revision,"contact":{k:getattr(contact,k) for k in Contact.__table__.columns.keys()} if contact else None,"ocr_text":ocr.raw_text if ocr else "","review_flags":contact.review_flags if contact else {},"orientation":c.orientation,"orientation_decision":c.orientation_decision}
 @app.delete("/api/cards/{card_id}")
 def remove_card(card_id: str, db: Session=Depends(get_db), user: User=Depends(current_user)):
     card=card_for_user(card_id,db,user)
@@ -295,13 +338,13 @@ def card_thumb(card_id: str, v: str | None=None, db: Session=Depends(get_db), us
 @app.post("/api/cards/{card_id}/ocr")
 async def ocr(card_id: str, db: Session=Depends(get_db), user: User=Depends(current_user)):
     c=card_for_user(card_id,db,user)
-    try: await run_ocr(c,db)
+    try: await recognize(c,db,llm=False)
     except ValueError as exc: raise HTTPException(502, str(exc)) from exc
     return {"status":c.status}
 @app.post("/api/cards/{card_id}/structure")
 async def struct(card_id: str, db: Session=Depends(get_db), user: User=Depends(current_user)):
     c=card_for_user(card_id,db,user)
-    try: await structure(c,db)
+    try: await recognize(c,db,ocr=False)
     except ValueError as exc: raise HTTPException(502, str(exc)) from exc
     return {"status":c.status}
 @app.put("/api/cards/{card_id}/contact")
@@ -343,8 +386,7 @@ async def reprocess(card_id: str, body: ReprocessInput, db: Session=Depends(get_
     c=card_for_user(card_id,db,user)
     try:
         # 向きは探索せず、現在の向き（ユーザーが直していればその向き）のままOCRし直す。
-        if body.ocr: await run_ocr(c,db)
-        if body.llm: await structure(c,db)
+        await recognize(c,db,ocr=body.ocr,llm=body.llm)
     except ValueError as exc: raise HTTPException(502, str(exc)) from exc
     return {"status":c.status}
 # --- 名刺画像の撮り直し。採用するまで既存の画像に触れない2段構え（docs/adr/0013 参照） ---
@@ -388,7 +430,7 @@ async def commit_replacement(card_id: str, token: str, body: ReplacementApplyInp
     except ValueError as exc: raise HTTPException(404, str(exc)) from exc
     record_audit(db,user,"replace_image","card",card.id,{"reread":body.reread}); db.commit()
     if body.reread:
-        try: await run_ocr(card, db); await structure(card, db)
+        try: await recognize(card, db)
         except ValueError as exc: raise HTTPException(502, str(exc)) from exc
         # structure() は解析直後の状態として review_required を立てる。読み直しは登録を
         # 取り消す操作ではないので、登録済みだった名刺は登録済みのまま戻す
@@ -400,8 +442,10 @@ async def set_orientation(card_id: str, body: OrientationInput, db: Session=Depe
     c=card_for_user(card_id,db,user)
     try:
         apply_orientation(c, db, body.rotation)
+        # ユーザーが決めた向きは、以後の自動判定に上書きさせない（docs/CONTEXT.md Orientation Decision）
+        c.orientation_decision = "user_confirmed"; db.commit()
         # 登録時に未確定の回転だけを書き込む経路は、フォームの入力値を再抽出結果で
         # 上書きしないよう、再読み取り(reread)を省略できる。
-        if body.reread: await run_ocr(c, db); await structure(c, db)
+        if body.reread: await recognize(c, db)
     except ValueError as exc: raise HTTPException(502, str(exc)) from exc
-    return {"status":c.status,"orientation":c.orientation}
+    return {"status":c.status,"orientation":c.orientation,"orientation_decision":c.orientation_decision}

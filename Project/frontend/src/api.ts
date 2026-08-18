@@ -17,6 +17,7 @@ export type Me = {
   organization_id: string;
   sharing_mode: string;
   groups: Group[];
+  recognition_v2_available: boolean;
 };
 
 export type LoginResult = { status: 'ok' | 'totp_required' };
@@ -220,13 +221,14 @@ export function fetchPhotos(): Promise<PhotoSummary[]> {
   return request<PhotoSummary[]>('/photos');
 }
 
-export async function uploadPhoto(groupId: string, file: File): Promise<string> {
+export async function uploadPhoto(groupId: string, file: File, useRecognitionV2 = false): Promise<string> {
   const body = new FormData();
   body.append('file', file);
-  const result = await request<{ photo_id: string }>(`/photos?group_id=${encodeURIComponent(groupId)}`, {
-    method: 'POST',
-    body,
-  });
+  const pipeline = useRecognitionV2 ? 'v2' : 'v1';
+  const result = await request<{ photo_id: string }>(
+    `/photos?group_id=${encodeURIComponent(groupId)}&pipeline_version=${pipeline}`,
+    { method: 'POST', body },
+  );
   return result.photo_id;
 }
 
