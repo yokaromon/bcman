@@ -29,6 +29,22 @@ poetry run python -m app.cli create-org --name "会社名" --group "一般" --ad
 **新規写真すべて**がV2で処理されます。既存の名刺は再処理されず、フラグをOFFへ戻せばV1へ即座に
 ロールバックできます（V1のコードパス自体は無変更のまま残っている）。
 
+### ⚠️ 本番で直したら pickup/ へも戻すこと
+
+`detector.py` / `orientation.py` / `alignment.py` / `text_regions.py` / `recognition_contract.py` /
+prompts / schemas は `pickup/` からの移植で、**両側が同一内容であることを前提にしている**。
+本番incident対応でこちら側だけ直して pickup へ戻し忘れると、次に pickup で評価したときの
+数値と本番の実際の挙動がずれる（2026-08-18に実際に発生）。
+
+```
+python scripts/check_v2_parity.py   # 共有ファイルの一致を確認
+```
+
+`pickup/` か `recognition_v2/` を触るcommitでは pre-commit フックが自動でこれを実行する
+（初回だけ `git config core.hooksPath scripts/hooks` を実行して有効化しておく）。
+`model_runtime.py` と `ykr_client.py` は本番固有の配線があり意図的に差分があってよい
+（フックは警告だけでブロックしない）。
+
 ### ⚠️ Python 3.11 が必須（本番サーバも要変更）
 
 V2は **Python 3.11** でしか動きません。3.12以降は venv に `setuptools` が同梱されなくなり、
