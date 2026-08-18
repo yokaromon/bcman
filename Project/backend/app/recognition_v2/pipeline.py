@@ -154,17 +154,6 @@ def add_manual_card_v2(photo: Photo, db: Session, corners) -> BusinessCard:
     return card
 
 
-async def _local_text_process(image) -> dict:
-    """ローカルPaddleOCRの文字領域検出。CPU推論エンジン内部で稀に一過性の
-    `RuntimeError: std::exception` が出ることを本番で確認した（同一画像・同一プロセス内で
-    直後の再実行は成功しており、再現性のある入力起因ではなさそうだった）。手動の
-    /reprocess には元々リトライが無く即500になっていたため、1回だけ再試行する。"""
-    try:
-        return await asyncio.to_thread(_local_text_pipeline().process, image, server=True)
-    except Exception:
-        return await asyncio.to_thread(_local_text_pipeline().process, image, server=True)
-
-
 def _apply_contact_fields(contact: Contact, enriched_fields: dict) -> dict:
     flags: dict[str, str] = {}
     for name in CONTACT_FIELDS:
@@ -186,7 +175,7 @@ async def run_ocr_v2(card: BusinessCard, db: Session) -> None:
     card.status = "ocr_processing"; db.commit()
     image_path = Path(card.oriented_image_path or card.corrected_image_path)
     image = detector.read_image(image_path)
-    local_ocr = await _local_text_process(image)
+    local_ocr = await asyncio.to_thread(_local_text_pipeline().process, image, server=True)
     client = _ykr_client()
     try:
         stage = await asyncio.to_thread(client.run_ocr, image_path)

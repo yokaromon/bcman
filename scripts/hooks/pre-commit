@@ -1,0 +1,22 @@
+#!/bin/sh
+# pickup/ か Project/backend/app/recognition_v2/ を変更するcommitのときだけ、
+# 移植元/本番の共有ファイルが揃っているか確認する。
+# 有効化: git config core.hooksPath scripts/hooks
+
+changed=$(git diff --cached --name-only)
+
+if echo "$changed" | grep -qE '^(pickup/|Project/backend/app/recognition_v2/)'; then
+    python scripts/check_v2_parity.py
+    status=$?
+    if [ $status -ne 0 ]; then
+        echo ""
+        echo "pre-commit: pickup/ と Project/backend/app/recognition_v2/ の間で"
+        echo "移植元ファイルが食い違っています（上記参照）。"
+        echo "揃えてから commit するか、意図的な変更なら scripts/check_v2_parity.py の"
+        echo "SHARED_FILES/ADAPTED_FILES を見直してください。"
+        echo "確認のうえ緊急でこのまま進める場合は git commit --no-verify"
+        exit 1
+    fi
+fi
+
+exit 0
