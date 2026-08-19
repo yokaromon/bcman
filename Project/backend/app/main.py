@@ -4,13 +4,14 @@ from pathlib import Path
 from fastapi import BackgroundTasks, Depends, FastAPI, File, HTTPException, Request, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
-from sqlalchemy import func, text
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from . import auth
 from .contact_search import DEFAULT_LEDGER_STATUS, LEDGER_STATUSES, search_contacts
 from .database import Base, SessionLocal, engine, get_db
 from .directory import models as directory_models, service as directory_service
 from .directory.routes import router as directory_router
+from .migrations import apply_sqlite_migrations
 from .models import AuditLog, BusinessCard, Contact, Group, OCRResult, Organization, Photo, TrustedDevice, User, UserGroup
 from .schemas import BatchConfirmInput, CardRegistrationInput, CompleteReviewInput, ContactInput, GroupInput, LoginInput, ManualCardInput, OrientationInput, OrganizationInput, PasswordResetInput, ReplacementApplyInput, ReprocessInput, TotpInput, UserInput
 from .search_text import refresh_search_text
@@ -39,15 +40,7 @@ def bootstrap():
     Base.metadata.create_all(engine); settings.storage_dir.mkdir(parents=True, exist_ok=True)
     if engine.dialect.name == "sqlite":
         with engine.begin() as connection:
-            columns = {row[1] for row in connection.execute(text("PRAGMA table_info(contacts)"))}
-            if "review_flags" not in columns: connection.execute(text("ALTER TABLE contacts ADD COLUMN review_flags JSON DEFAULT '{}'"))
-            if "search_text" not in columns: connection.execute(text("ALTER TABLE contacts ADD COLUMN search_text TEXT DEFAULT ''"))
-            card_columns = {row[1] for row in connection.execute(text("PRAGMA table_info(business_cards)"))}
-            if "oriented_image_path" not in card_columns: connection.execute(text("ALTER TABLE business_cards ADD COLUMN oriented_image_path VARCHAR DEFAULT ''"))
-            if "orientation" not in card_columns: connection.execute(text("ALTER TABLE business_cards ADD COLUMN orientation INTEGER DEFAULT 0"))
-            if "orientation_decision" not in card_columns: connection.execute(text("ALTER TABLE business_cards ADD COLUMN orientation_decision VARCHAR DEFAULT ''"))
-            photo_columns = {row[1] for row in connection.execute(text("PRAGMA table_info(photos)"))}
-            if "pipeline_version" not in photo_columns: connection.execute(text("ALTER TABLE photos ADD COLUMN pipeline_version VARCHAR DEFAULT 'v1'"))
+            apply_sqlite_migrations(connection)
     backfill_search_text()
 
 def backfill_search_text():
