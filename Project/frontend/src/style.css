@@ -760,6 +760,18 @@ textarea.field__input {
   font-size: 0.82rem;
 }
 
+/* 台帳には未確認も並ぶ。ひと目で登録済みと区別が付かないと、確認漏れに気づけない */
+.ledger-row__badge {
+  margin-left: 6px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--warn-bg);
+  color: var(--warn-ink);
+  font-size: 0.72rem;
+  font-weight: 700;
+  vertical-align: middle;
+}
+
 /* --- 名刺画像の撮り直し --- */
 
 .retake {

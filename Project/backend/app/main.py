@@ -7,7 +7,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 from . import auth
-from .contact_search import search_contacts
+from .contact_search import DEFAULT_LEDGER_STATUS, LEDGER_STATUSES, search_contacts
 from .database import Base, SessionLocal, engine, get_db
 from .directory import models as directory_models, service as directory_service
 from .directory.routes import router as directory_router
@@ -313,8 +313,9 @@ def cards(photo_id: str, db: Session=Depends(get_db), user: User=Depends(current
 # --- 台帳（登録済み連絡先の検索）。docs/CONTEXT.md の「台帳検索」参照 ---
 
 @app.get("/api/contacts")
-def list_contacts(q: str="", limit: int=LEDGER_PAGE_SIZE, offset: int=0, db: Session=Depends(get_db), user: User=Depends(current_user)):
-    return search_contacts(db, user, q, min(max(limit,1), LEDGER_MAX_PAGE_SIZE), max(offset,0))
+def list_contacts(q: str="", status: str=DEFAULT_LEDGER_STATUS, limit: int=LEDGER_PAGE_SIZE, offset: int=0, db: Session=Depends(get_db), user: User=Depends(current_user)):
+    if status not in LEDGER_STATUSES: raise HTTPException(400,"status の指定が不正です")
+    return search_contacts(db, user, q, min(max(limit,1), LEDGER_MAX_PAGE_SIZE), max(offset,0), status)
 
 @app.get("/api/cards/{card_id}")
 def card(card_id: str, db: Session=Depends(get_db), user: User=Depends(current_user)):

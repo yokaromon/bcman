@@ -52,24 +52,52 @@ def test_finds_a_confirmed_contact_despite_spacing(db):
     assert result["items"][0]["card_owner"]["name"] == "管理者"
 
 
-def test_unconfirmed_contacts_stay_out_of_the_ledger(db):
+def test_unconfirmed_contacts_are_searchable(db):
+    """撮った名刺が引けないと「登録済みのはず」と誤解される。確認済みかは行ごとに示す。"""
     user = _seed(db)
-    _add_contact(db, user, exchanged_at=date(2026, 3, 14), person_name="未登録 花子", confirmed=False)
+    _add_contact(db, user, exchanged_at=None, person_name="未確認 花子", confirmed=False)
 
-    assert search_contacts(db, user, "未登録", limit=50, offset=0)["total"] == 0
+    result = search_contacts(db, user, "未確認", limit=50, offset=0)
+
+    assert result["total"] == 1
+    assert result["items"][0]["confirmed"] is False
+
+
+def test_ledger_status_filter_narrows_to_one_side(db):
+    user = _seed(db)
+    _add_contact(db, user, exchanged_at=date(2026, 3, 14), person_name="確認済み 太郎")
+    _add_contact(db, user, exchanged_at=None, person_name="未確認 花子", confirmed=False)
+
+    both = search_contacts(db, user, "", limit=50, offset=0)
+    confirmed = search_contacts(db, user, "", limit=50, offset=0, status="confirmed")
+    unconfirmed = search_contacts(db, user, "", limit=50, offset=0, status="unconfirmed")
+
+    assert both["total"] == 2
+    assert [item["person_name"] for item in confirmed["items"]] == ["確認済み 太郎"]
+    assert [item["person_name"] for item in unconfirmed["items"]] == ["未確認 花子"]
+
+
+def test_unconfirmed_are_ordered_by_capture_date_instead_of_sinking(db):
+    """交換日は確定時にしか入らない。撮影日で代用しないと未確認が全件末尾へ沈む。"""
+    user = _seed(db)
+    _add_contact(db, user, exchanged_at=date(2025, 1, 1), person_name="古い確認済み")
+    # 交換日なし＝未確認。撮影は今なので、古い確認済みより前に出るべき
+    _add_contact(db, user, exchanged_at=None, person_name="今日の未確認", confirmed=False)
+
+    result = search_contacts(db, user, "", limit=50, offset=0)
+
+    assert [item["person_name"] for item in result["items"]] == ["今日の未確認", "古い確認済み"]
 
 
 def test_empty_query_returns_everything_newest_exchange_first(db):
     user = _seed(db)
     _add_contact(db, user, exchanged_at=date(2025, 1, 1), person_name="古い")
     _add_contact(db, user, exchanged_at=date(2026, 6, 1), person_name="新しい")
-    # 交換日が無い行が先頭に来てはいけない
-    _add_contact(db, user, exchanged_at=None, person_name="日付なし")
 
-    result = search_contacts(db, user, "", limit=50, offset=0)
+    result = search_contacts(db, user, "", limit=50, offset=0, status="confirmed")
 
-    assert result["total"] == 3
-    assert [item["person_name"] for item in result["items"]] == ["新しい", "古い", "日付なし"]
+    assert result["total"] == 2
+    assert [item["person_name"] for item in result["items"]] == ["新しい", "古い"]
 
 
 def test_paging_walks_the_whole_result(db):

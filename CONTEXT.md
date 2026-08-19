@@ -197,8 +197,8 @@ A fresh photograph of one Business Card, taken to replace an image that is blurr
 _Avoid_: Re-upload, rescan, new photo
 
 **Ledger**:
-The searchable view of every Confirmed Contact a user may see, independent of which Photo each one came from. It is where registered information is corrected after the fact, and it never shows Contacts that were never confirmed — those remain reachable only by working back through their Photo.
-_Avoid_: Directory (reserved for Person/Company aggregation), history, contact list
+The searchable view of every Contact a user may see, confirmed or not, independent of which Photo each one came from. It is where registered information is corrected after the fact. An unconfirmed Contact is shown as unconfirmed on its own row and can be narrowed away by an explicit filter, but is never hidden by default: a captured card that cannot be found reads as a system fault rather than as an unfinished task, and silently withholding it is what lets the confirmation step be forgotten. Ordering falls back to the Photo's capture date while Exchanged At is still unset, so unconfirmed entries stay in view instead of sinking beneath every confirmed one. Only confirmed Contacts reach the Directory.
+_Avoid_: Directory (reserved for Person/Company aggregation), history, contact list, confirmed-only view
 
 **Exchanged At**:
 The date a Business Card was actually exchanged in person, as distinct from when its Photo was uploaded. Defaults to the Photo's upload date at Batch Registration time but can be corrected by the Card Owner, to cover batch-scanning a stack of cards well after the events they came from.

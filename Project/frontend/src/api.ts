@@ -285,16 +285,20 @@ export function deleteCard(cardId: string): Promise<{ deleted: boolean }> {
   return request<{ deleted: boolean }>(`/cards/${cardId}`, { method: 'DELETE' });
 }
 
-// --- 台帳（登録済み名刺の検索） ---
+// --- 台帳（撮影済み名刺の検索。未確認も含む） ---
 
 /** 1ページの件数。増やすほど初回表示は重くなる。 */
 export const LEDGER_PAGE_SIZE = 50;
 /** 入力が止まってから検索するまでの待ち時間(ms)。 */
 export const LEDGER_SEARCH_DEBOUNCE_MS = 300;
 
+/** 台帳に出す範囲。既定は all（未確認も含む）。 */
+export type LedgerStatus = 'all' | 'confirmed' | 'unconfirmed';
+
 export type LedgerEntry = {
   contact_id: string;
   card_id: string;
+  confirmed: boolean;
   status: CardStatus;
   image_revision: string;
   person_name: string | null;
@@ -307,8 +311,13 @@ export type LedgerEntry = {
 
 export type LedgerPage = { total: number; items: LedgerEntry[] };
 
-export function searchContacts(query: string, offset = 0, limit = LEDGER_PAGE_SIZE): Promise<LedgerPage> {
-  const params = new URLSearchParams({ q: query, offset: String(offset), limit: String(limit) });
+export function searchContacts(
+  query: string,
+  offset = 0,
+  limit = LEDGER_PAGE_SIZE,
+  status: LedgerStatus = 'all',
+): Promise<LedgerPage> {
+  const params = new URLSearchParams({ q: query, status, offset: String(offset), limit: String(limit) });
   return request<LedgerPage>(`/contacts?${params}`);
 }
 

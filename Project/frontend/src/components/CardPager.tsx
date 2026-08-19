@@ -14,7 +14,8 @@ type Props = {
   index: number;
   failedCardIds: Set<string>;
   confirmLabel: string;
-  mode?: ReviewMode;
+  /** 'auto' は名刺ごとに切り替える。台帳のように確認済みと未確認が混ざる一覧で使う。 */
+  mode?: ReviewMode | 'auto';
   onIndexChange: (next: number) => void;
   onConfirmed: (cardId: string) => void;
   onDeleted?: (cardId: string) => void;
@@ -118,10 +119,14 @@ export function CardPager({
 
   const failed = failedCardIds.has(card.id);
   const showForm = failed || isCardReady(card.status);
-  const deletionMessage =
-    card.status === 'confirmed'
-      ? 'この名刺は登録済みです。削除すると連絡先も消えます。元に戻せません。'
-      : 'この名刺と読み取り結果を削除します。元に戻せません。';
+  const confirmed = card.status === 'confirmed';
+  // 台帳は確認済みと未確認が混ざるので、開いた名刺に合わせて編集モードと操作名を変える。
+  // 未確認を「保存」で閉じられると、登録したつもりのまま未確認で残る
+  const reviewMode: ReviewMode = mode === 'auto' ? (confirmed ? 'edit' : 'review') : mode;
+  const actionLabel = mode === 'auto' ? (confirmed ? '保存' : '登録') : confirmLabel;
+  const deletionMessage = confirmed
+    ? 'この名刺は登録済みです。削除すると連絡先も消えます。元に戻せません。'
+    : 'この名刺と読み取り結果を削除します。元に戻せません。';
 
   const remove = async () => {
     setErrorMessage('');
@@ -138,7 +143,7 @@ export function CardPager({
     <div className="screen screen--form">
       {/* 入力欄でのカーソル移動と競合しないよう、スワイプは画像の上だけで拾う */}
       <div className="card-image" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
-        {card.status !== 'confirmed' && <span className="card-image__badge">未登録</span>}
+        {!confirmed && <span className="card-image__badge">未確認</span>}
         <img key={`${card.id}-${imageRevision}`} className={previewRotation ? 'card-image__rotated' : ''} style={{ transform: `rotate(${previewRotation}deg)` }} src={cardImageUrl(card.id, imageRevision || card.image_revision)} alt={`名刺 ${index + 1} の画像`} />
         {total > 1 && <span className="card-image__hint">← 画像を左右にスワイプで切り替え →</span>}
       </div>
@@ -207,9 +212,9 @@ export function CardPager({
           key={card.id}
           cardId={card.id}
           failed={failed}
-          confirmLabel={confirmLabel}
+          confirmLabel={actionLabel}
           previewRotation={previewRotation}
-          mode={mode}
+          mode={reviewMode}
           onConfirmed={onConfirmed}
           onRotationChange={setPreviewRotation}
           onImageRevision={setImageRevision}

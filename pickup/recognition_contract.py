@@ -255,6 +255,12 @@ def enrich_contact(
         for item in (alignment or [])
         if item.get("alignment_status") == "matched" and item.get("region_id")
     }
+    # ローカル検出が1領域も出せなかったときは、突き合わせる材料が無いだけで「対応しない行
+    # から抽出された」根拠にはならない。region_idを持つ項目が1つも無ければローカル側が空。
+    # 「検出できたが一致しなかった」は正当なフラグなので、両者を区別する。ここを混同すると
+    # ローカル検出が0件の名刺で全項目にフラグが立ち、一括登録できないカードが量産される
+    # （2026-08-19、本番の未確認32件に173個の偽陽性が溜まっていた）。
+    local_regions_found = any(item.get("region_id") for item in (alignment or []))
     enriched = {"schema_version": 1, "fields": {}, "review_flags": []}
     for name in CONTACT_FIELDS:
         source = document["fields"][name]
@@ -282,7 +288,7 @@ def enrich_contact(
             ):
                 flags.append("evidence_mismatch")
                 evidence_status = "unsupported"
-            if alignment is not None and source["source_line_ids"] and not (
+            if local_regions_found and source["source_line_ids"] and not (
                 set(source["source_line_ids"]) & matched_lines
             ):
                 flags.append("unmatched_text_only")
