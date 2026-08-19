@@ -9,3 +9,7 @@ TOTP was chosen over an administrator-issued one-time code for the Registration 
 ## Consequences
 
 A Trusted Device is bound to a browser via a persistent cookie, not to a physical device — clearing cookies or switching browsers looks like a new, untrusted device and asks for the Registration Code again. Administrators can revoke a Trusted Device immediately (for a lost phone) without waiting for its 90-day expiry.
+
+## Later amendments
+
+Organizations are no longer provisioned by shell script; see [ADR 0002](./0002-provider-operated-provisioning-by-invitation.md). The argument above for keeping the Office Network allow-list in nginx config rather than per-Organization in the database rested partly on that premise, so it is weaker than it was and worth revisiting if the number of Organizations grows. Registration Code enrolment also moved from account creation to Invitation completion, and is now proven before an account can be used at all.
