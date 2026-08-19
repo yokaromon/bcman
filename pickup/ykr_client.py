@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import json
+import os
 from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
@@ -11,7 +12,9 @@ from urllib.parse import urlsplit
 import httpx
 from PIL import Image
 
-from .recognition_contract import (
+from recognition_contract import (
+    CONTACT_SCHEMA,
+    OCR_SCHEMA,
     parse_json_object,
     repair_contact_document,
     validate_contact_response,
@@ -20,6 +23,8 @@ from .recognition_contract import (
 
 
 BASE_DIR = Path(__file__).resolve().parent
+PROMPT_DIR = BASE_DIR / "prompts" / "v1"
+YKR_BASE_URL = "https://app.ykr.ltd/ai/v1"
 REQUEST_TIMEOUT_SECONDS = 90
 MAX_ATTEMPTS_PER_STAGE = 2
 
@@ -38,12 +43,34 @@ class YkrSettings:
     ocr_model: str
     contact_model: str
 
+    @classmethod
+    def from_environment(cls) -> "YkrSettings":
+        _load_env_file(BASE_DIR / ".env")
+        common_model = os.environ.get("AI_MODEL", "")
+        settings = cls(
+            base_url=os.environ.get(
+                "BCPICKUP_YKR_BASE_URL",
+                os.environ.get("AI_BASE_URL", YKR_BASE_URL),
+            ).rstrip("/"),
+            api_key=os.environ.get(
+                "BCPICKUP_YKR_API_KEY", os.environ.get("AI_API_KEY", "")
+            ),
+            ocr_model=os.environ.get("BCPICKUP_YKR_OCR_MODEL", common_model),
+            contact_model=os.environ.get(
+                "BCPICKUP_YKR_CONTACT_MODEL", common_model
+            ),
+        )
+        settings.validate()
+        return settings
+
     def validate(self) -> None:
         missing = []
         if not self.api_key:
-            missing.append("AI_API_KEY")
-        if not self.ocr_model or not self.contact_model:
-            missing.append("AI_MODEL")
+            missing.append("BCPICKUP_YKR_API_KEY (またはAI_API_KEY)")
+        if not self.ocr_model:
+            missing.append("BCPICKUP_YKR_OCR_MODEL (またはAI_MODEL)")
+        if not self.contact_model:
+            missing.append("BCPICKUP_YKR_CONTACT_MODEL (またはAI_MODEL)")
         if missing:
             raise ManagedRecognitionError("設定がありません: " + ", ".join(missing))
         parsed = urlsplit(self.base_url)
@@ -54,6 +81,20 @@ class YkrSettings:
         for model in (self.ocr_model, self.contact_model):
             if model.casefold() == "latest" or model.casefold().endswith(":latest"):
                 raise ManagedRecognitionError("modelはlatestではなく固定名を指定してください")
+
+
+def _load_env_file(path: Path) -> None:
+    if not path.is_file():
+        return
+    for raw in path.read_text(encoding="utf-8-sig").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip().strip('"').strip("'")
+        if key:
+            os.environ.setdefault(key, value)
 
 
 @dataclass(frozen=True)

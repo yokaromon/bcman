@@ -23,6 +23,7 @@ from ..search_text import refresh_search_text
 from ..settings import settings
 from . import detector
 from .alignment import align_ocr_lines
+from .local_contact import contact_from_ocr_lines
 from .model_runtime import PaddleModels
 from .orientation import OrientationEngine
 from .recognition_contract import CONTACT_FIELDS, RecognitionContractError, enrich_contact
@@ -35,9 +36,12 @@ ORIENTATION_MODEL_NAME = "PP-LCNet_x1_0_doc_ori"
 DETECTOR_ENGINE = "pickup-detector-v2"
 OCR_ENGINE = "ykr-ocr-v2"
 CONTACT_ENGINE = "ykr-contact-v2"
+BASELINE_ENGINE = "format-baseline-v2"
 CARD_PROCESS_CONCURRENCY = 3
 
 REVIEW_FLAG_MESSAGES = {
+    "repaired_response": "AIの応答が壊れていたため自動補正しました（要確認）",
+    "format_baseline": "AIの構造化に失敗し、OCR本文の形式のみで抽出しました（要確認）",
     "unreadable": "読み取れませんでした（要確認）",
     "missing_text_evidence": "OCR原文に根拠が見つかりません（要確認）",
     "evidence_mismatch": "OCR原文と一致しません（要確認）",
@@ -207,6 +211,29 @@ async def run_ocr_v2(card: BusinessCard, db: Session) -> None:
     card.status = "ocr_completed"; db.commit()
 
 
+def _flag_repaired_fields(enriched: dict, repairs: list[dict], reason: str) -> None:
+    """自動補正した項目を必ず要確認にする。補正結果が黙って登録されないための歯止め。"""
+    for repair in repairs:
+        name = repair.get("field")
+        field = enriched["fields"].get(name) if name else None
+        if field is None:
+            continue
+        # _apply_contact_fieldsは先頭の理由を採用するため、補正の事実を最優先で見せる
+        field["review_flags"] = [reason] + [r for r in field["review_flags"] if r != reason]
+        enriched["review_flags"].append({"field": name, "reason": reason, "detail": repair.get("detail")})
+
+
+def _baseline_contact(ocr_document: dict) -> tuple[dict, list[dict]]:
+    """構造化が全滅したときに、OCR本文から形式が確実な項目だけを拾う下限。"""
+    document = contact_from_ocr_lines(ocr_document)
+    repairs = [
+        {"field": name, "detail": "OCR本文から形式のみで抽出しました"}
+        for name in CONTACT_FIELDS
+        if document["fields"][name]["state"] == "present"
+    ]
+    return document, repairs
+
+
 async def structure_v2(card: BusinessCard, db: Session) -> None:
     result = db.query(OCRResult).filter_by(card_id=card.id).order_by(OCRResult.created_at.desc()).first()
     if not result: raise ValueError("先にOCRを実行してください")
@@ -214,18 +241,28 @@ async def structure_v2(card: BusinessCard, db: Session) -> None:
     alignment = result.raw_json.get("alignment") or []
     ocr_document = {"schema_version": 1, "lines": result.raw_json["lines"]}
     client = _ykr_client()
+    engine, version, prompt_version, attempts = CONTACT_ENGINE, "", "", 0
     try:
         stage = await asyncio.to_thread(client.structure_contact, ocr_document, alignment)
-    except (ManagedRecognitionError, RecognitionContractError) as exc:
-        raise ValueError(str(exc)) from exc
-    enriched = enrich_contact(stage.document, ocr_document, alignment=alignment)
+        document, repairs = stage.document, list(stage.repairs)
+        version, prompt_version, attempts = stage.model, stage.prompt_version, stage.attempts
+        reason = "repaired_response"
+    except (ManagedRecognitionError, RecognitionContractError):
+        # 構造化が全滅しても0点にはしない。ykrのOCR本文は既に手元にあるので、形式で
+        # 断定できる項目だけでも候補として残す（2026-08-19、契約違反で全項目を
+        # 失っていた実インシデント）。氏名・会社名などは拾えないままになる。
+        logger.exception("recognition_v2: card %s contact structuring failed, falling back to format baseline", card.id)
+        document, repairs = _baseline_contact(ocr_document)
+        engine, version, prompt_version, reason = BASELINE_ENGINE, "format-baseline-v1", "none", "format_baseline"
+    enriched = enrich_contact(document, ocr_document, alignment=alignment)
+    _flag_repaired_fields(enriched, repairs, reason)
     contact = db.query(Contact).filter_by(card_id=card.id).first() or Contact(card_id=card.id)
     contact.review_flags = _apply_contact_fields(contact, enriched["fields"])
     refresh_search_text(contact)
     db.add(contact)
     db.add(ProcessingHistory(
-        card_id=card.id, process_type="llm", engine=CONTACT_ENGINE, version=stage.model,
-        input_json={"prompt_version": stage.prompt_version, "attempts": stage.attempts},
+        card_id=card.id, process_type="llm", engine=engine, version=version,
+        input_json={"prompt_version": prompt_version, "attempts": attempts, "repairs": repairs},
         output_json=enriched,
     ))
     card.status = "review_required"; db.commit()

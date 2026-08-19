@@ -30,6 +30,7 @@ SHARED_FILES = [
     "alignment.py",
     "text_regions.py",
     "recognition_contract.py",
+    "local_contact.py",
     "prompts/v1/ocr.txt",
     "prompts/v2/contact.txt",
     "schemas/v1/contact_response.schema.json",
