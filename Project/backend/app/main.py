@@ -11,9 +11,11 @@ from .contact_search import DEFAULT_LEDGER_STATUS, LEDGER_STATUSES, search_conta
 from .database import Base, SessionLocal, engine, get_db
 from .directory import models as directory_models, service as directory_service
 from .directory.routes import router as directory_router
+from .invitations import complete_invitation, describe_invitation, issue_invitation, resolve_invitation
 from .migrations import apply_sqlite_migrations
 from .models import AuditLog, BusinessCard, Contact, Group, OCRResult, Organization, Photo, TrustedDevice, User, UserGroup
-from .schemas import BatchConfirmInput, CardRegistrationInput, CompleteReviewInput, ContactInput, GroupInput, LoginInput, ManualCardInput, OrientationInput, OrganizationInput, PasswordResetInput, ReplacementApplyInput, ReprocessInput, TotpInput, UserInput
+from .provider import router as provider_router
+from .schemas import BatchConfirmInput, CardRegistrationInput, CompleteReviewInput, ContactInput, GroupInput, InvitationCompleteInput, LoginInput, ManualCardInput, OrientationInput, OrganizationInput, ReplacementApplyInput, ReprocessInput, TotpInput, UserInput, normalize_company_code
 from .search_text import refresh_search_text
 from .services import add_manual_card, apply_orientation, apply_replacement, card_image_revision, card_thumbnail, delete_card, delete_photo, discard_replacement, image_size, pending_replacement_path, photo_thumbnail, prepare_replacement, process_card, process_photo, run_ocr, structure, user_group_ids, visible_photo_query
 from .settings import settings
@@ -31,6 +33,7 @@ MUTABLE_IMAGE_CACHE_CONTROL = "private, no-cache"
 app = FastAPI(title="BCMan API", root_path=settings.root_path)
 app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173"], allow_methods=["*"], allow_headers=["*"], allow_credentials=True)
 app.include_router(directory_router)
+app.include_router(provider_router)
 
 def bootstrap():
     """Organization・初期管理者の作成はアプリ外（scripts/create_org.py）で行う。
@@ -92,9 +95,13 @@ def health(): return {"status":"ok"}
 
 @app.post("/api/auth/login")
 def login(body: LoginInput, request: Request, response: Response, db: Session=Depends(get_db)):
-    user = db.query(User).filter_by(username=body.username).first()
-    if not user:
-        # ID自体が存在しない場合も所要時間・応答を揃え、IDの実在を推測させない
+    org = db.query(Organization).filter_by(code=normalize_company_code(body.company_code)).first()
+    user = db.query(User).filter_by(organization_id=org.id, username=body.username).first() if org else None
+    if not user or user.activated_at is None:
+        # 会社コードが無い・IDが無い・招待未完了の3つを区別させない。応答本文だけでなく
+        # bcryptを空回しして所要時間まで揃える。未有効化に親切な文言を出すと、最も推測
+        # しやすい文字列である初期管理者IDの実在を確認させてしまう
+        auth.verify_password(body.password, auth.ABSENT_USER_PASSWORD_HASH)
         raise HTTPException(401, "IDまたはパスワードが違います")
     auth.check_not_locked(user)
     if not auth.verify_password(body.password, user.password_hash):
@@ -122,11 +129,25 @@ def verify_totp(body: TotpInput, request: Request, response: Response, db: Sessi
 def logout(request: Request, response: Response, db: Session=Depends(get_db)):
     auth.clear_session(request, response, db); return {"status":"ok"}
 
+# --- 招待の受け取り。認証不要（トークンの所持が資格情報。docs/identity/adr/0002） ---
+
+@app.get("/api/invitations/{token}")
+def read_invitation(token: str, db: Session=Depends(get_db)):
+    return describe_invitation(db, resolve_invitation(db, token))
+
+@app.post("/api/invitations/{token}/complete")
+def complete_invitation_route(token: str, body: InvitationCompleteInput, request: Request, response: Response, db: Session=Depends(get_db)):
+    invitation = resolve_invitation(db, token)
+    user = complete_invitation(db, invitation, body.password, body.code, request, response)
+    record_audit(db, user, "invitation_completed", "user", user.id, {"organization_id": user.organization_id})
+    db.commit()
+    return {"status":"ok"}
+
 @app.get("/api/auth/me")
 def me(db: Session=Depends(get_db), user: User=Depends(current_user)):
     org = db.get(Organization, user.organization_id)
     groups = db.query(Group).join(UserGroup, UserGroup.group_id == Group.id).filter(UserGroup.user_id == user.id).all()
-    return {"id":user.id,"username":user.username,"name":user.name,"role":user.role,"organization_id":user.organization_id,"sharing_mode":org.sharing_mode if org else None,"groups":[{"id":g.id,"name":g.name} for g in groups],"recognition_v2_active":settings.recognition_pipeline_v2_enabled}
+    return {"id":user.id,"username":user.username,"name":user.name,"role":user.role,"is_provider_operator":bool(user.is_provider_operator),"organization_id":user.organization_id,"company_code":org.code if org else "","sharing_mode":org.sharing_mode if org else None,"groups":[{"id":g.id,"name":g.name} for g in groups],"recognition_v2_active":settings.recognition_pipeline_v2_enabled}
 
 # --- 組織・グループ・ユーザ管理（Organization管理者のみ。Organization自体の新規作成はシェルスクリプトで行う） ---
 
@@ -146,39 +167,56 @@ def create_group(org_id: str, body: GroupInput, db: Session=Depends(get_db), use
     item=Group(organization_id=org_id, **body.model_dump()); db.add(item); db.commit(); return item
 @app.get("/api/members")
 def list_members(db: Session=Depends(get_db), user: User=Depends(current_user)):
-    """Card Owner（登録者）選択肢用。list_users と違い管理者限定にせず、自分のOrganizationのid/nameのみ返す。"""
-    return [{"id":u.id,"name":u.name} for u in db.query(User).filter_by(organization_id=user.organization_id).order_by(User.name)]
+    """Card Owner（登録者）選択肢用。list_users と違い管理者限定にせず、自分のOrganizationのid/nameのみ返す。
+    招待未完了の利用者は、まだ本人が受け取っていないので登録者に選べない。"""
+    members = db.query(User).filter_by(organization_id=user.organization_id).filter(User.activated_at.isnot(None)).order_by(User.name)
+    return [{"id":u.id,"name":u.name} for u in members]
 @app.get("/api/organizations/{org_id}/users")
 def list_users(org_id: str, db: Session=Depends(get_db), user: User=Depends(require_admin)):
     if user.organization_id != org_id: raise HTTPException(403, "権限がありません")
     users = db.query(User).filter_by(organization_id=org_id).all()
-    return [{"id":u.id,"username":u.username,"name":u.name,"role":u.role,"groups":[g.id for g in db.query(Group).join(UserGroup, UserGroup.group_id==Group.id).filter(UserGroup.user_id==u.id)]} for u in users]
+    # 未有効化の利用者も出す。管理者は「誰が招待中か」を見て再招待できる必要がある
+    return [{"id":u.id,"username":u.username,"name":u.name,"role":u.role,"activated":u.activated_at is not None,"groups":[g.id for g in db.query(Group).join(UserGroup, UserGroup.group_id==Group.id).filter(UserGroup.user_id==u.id)]} for u in users]
 @app.post("/api/organizations/{org_id}/users")
 def create_user(org_id: str, body: UserInput, db: Session=Depends(get_db), user: User=Depends(require_admin)):
     if user.organization_id != org_id: raise HTTPException(403, "権限がありません")
     require_group_in_org(db, org_id, body.group_ids)
-    if db.query(User).filter_by(username=body.username).first(): raise HTTPException(409, "そのIDは既に使われています")
-    secret = auth.generate_totp_secret()
-    item = User(organization_id=org_id, username=body.username, name=body.name, role=body.role, password_hash=auth.hash_password(body.password), totp_secret=secret)
-    db.add(item); db.flush()
+    item = create_invited_user(db, org_id, body.username, body.name, body.role, user)
     for group_id in set(body.group_ids): db.add(UserGroup(user_id=item.id, group_id=group_id))
+    issued = issue_invitation(db, item, user)
+    record_audit(db, user, "invite", "user", item.id, {"organization_id": org_id, "username": item.username, "reissue": False})
     db.commit()
-    return {"id":item.id,"username":item.username,"totp_provisioning_uri":auth.totp_provisioning_uri(secret, item.username)}
+    return issued
+def create_invited_user(db: Session, org_id: str, username: str, name: str, role: str, issued_by: User) -> User:
+    """招待待ちの利用者を作る。パスワードとTOTPは本人が招待を完了するまで空のまま。"""
+    if db.query(User).filter_by(organization_id=org_id, username=username).first():
+        raise HTTPException(409, "そのIDは既に使われています")
+    item = User(organization_id=org_id, username=username, name=name, role=role,
+                password_hash="", totp_secret="", activated_at=None)
+    db.add(item); db.flush()
+    return item
 def target_user_in_org(db: Session, org_id: str, user_id: str) -> User:
     target = db.get(User, user_id)
     if not target or target.organization_id != org_id: raise HTTPException(404, "利用者が見つかりません")
     return target
-@app.put("/api/organizations/{org_id}/users/{user_id}/password")
-def reset_password(org_id: str, user_id: str, body: PasswordResetInput, db: Session=Depends(get_db), admin: User=Depends(require_admin)):
+@app.post("/api/organizations/{org_id}/users/{user_id}/invitations")
+def reinvite_user(org_id: str, user_id: str, db: Session=Depends(get_db), admin: User=Depends(require_admin)):
+    """自組織の利用者を招待し直す。パスワード忘れも認証アプリ紛失もこれ1つで戻す。"""
     if admin.organization_id != org_id: raise HTTPException(403, "権限がありません")
     target = target_user_in_org(db, org_id, user_id)
-    target.password_hash = auth.hash_password(body.password); db.commit(); return {"reset":True}
-@app.post("/api/organizations/{org_id}/users/{user_id}/reset-totp")
-def reset_totp(org_id: str, user_id: str, db: Session=Depends(get_db), admin: User=Depends(require_admin)):
+    issued = issue_invitation(db, target, admin)
+    record_audit(db, admin, "invite", "user", target.id, {"organization_id": org_id, "username": target.username, "reissue": True})
+    db.commit()
+    return issued
+@app.get("/api/organizations/{org_id}/audit-logs")
+def list_audit_logs(org_id: str, limit: int=100, db: Session=Depends(get_db), admin: User=Depends(require_admin)):
+    """自組織に対して行われた操作の記録。運営者が他社アカウントを触ったことを
+    当事者が後から辿れるようにするためのもの（docs/identity/adr/0002）。"""
     if admin.organization_id != org_id: raise HTTPException(403, "権限がありません")
-    target = target_user_in_org(db, org_id, user_id)
-    secret = auth.generate_totp_secret(); target.totp_secret = secret; db.commit()
-    return {"totp_provisioning_uri":auth.totp_provisioning_uri(secret, target.username)}
+    member_ids = {row.id for row in db.query(User.id).filter_by(organization_id=org_id)}
+    rows = db.query(AuditLog).order_by(AuditLog.created_at.desc()).limit(min(max(limit, 1), 500)).all()
+    visible = [row for row in rows if row.target_id in member_ids or (row.detail or {}).get("organization_id") == org_id]
+    return [{"id":r.id,"user_name":r.user_name,"action":r.action,"target_type":r.target_type,"target_id":r.target_id,"detail":r.detail,"created_at":r.created_at} for r in visible]
 @app.post("/api/organizations/{org_id}/users/{user_id}/unlock")
 def unlock_user(org_id: str, user_id: str, db: Session=Depends(get_db), admin: User=Depends(require_admin)):
     if admin.organization_id != org_id: raise HTTPException(403, "権限がありません")

@@ -26,6 +26,11 @@ def now() -> datetime: return datetime.utcnow()
 
 # --- パスワード ---
 
+# 存在しない利用者のログイン試行でも、これに対して照合して所要時間を揃えるためのダミー。
+# 実在しないIDだと bcrypt を通らず即座に返る状態だと、応答本文が同じでも所要時間で
+# IDや会社コードの実在を推測できてしまう。起動のたびに生成すると毎回100ms掛かるので定数。
+ABSENT_USER_PASSWORD_HASH = "$2b$12$C6UzMDM.H6dfI/f/IKcEe.3fCPaFTRxOhYAf/hnfKZbhIuqNTUJmy"
+
 def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 def verify_password(password: str, password_hash: str) -> bool:
@@ -34,8 +39,10 @@ def verify_password(password: str, password_hash: str) -> bool:
 # --- TOTP（未知端末の登録コード） ---
 
 def generate_totp_secret() -> str: return pyotp.random_base32()
-def totp_provisioning_uri(secret: str, username: str) -> str:
-    return pyotp.TOTP(secret).provisioning_uri(name=username, issuer_name="BCMan")
+def totp_provisioning_uri(secret: str, company_code: str, username: str) -> str:
+    """認証アプリに出る名前。会社コードを含めるのは、各社が admin を使える以上、
+    含めないと「BCMan: admin」が複数並んで本人が見分けられなくなるため。"""
+    return pyotp.TOTP(secret).provisioning_uri(name=f"{company_code}/{username}", issuer_name="BCMan")
 def verify_totp(secret: str, code: str) -> bool:
     return pyotp.TOTP(secret).verify(code, valid_window=1)
 
