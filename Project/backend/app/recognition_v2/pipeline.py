@@ -12,6 +12,7 @@ ADR 0019 / CONTEXT.md の Reading Orientation・Structured Field Candidate の�
 from __future__ import annotations
 
 import asyncio
+import logging
 from pathlib import Path
 
 import cv2
@@ -27,6 +28,8 @@ from .orientation import OrientationEngine
 from .recognition_contract import CONTACT_FIELDS, RecognitionContractError, enrich_contact
 from .text_regions import LocalTextPipeline
 from .ykr_client import ManagedRecognitionClient, ManagedRecognitionError, YkrSettings
+
+logger = logging.getLogger(__name__)
 
 ORIENTATION_MODEL_NAME = "PP-LCNet_x1_0_doc_ori"
 DETECTOR_ENGINE = "pickup-detector-v2"
@@ -230,6 +233,9 @@ async def _process_card_v2(card_id: str) -> None:
                 await run_ocr_v2(card, db); await structure_v2(card, db); return
             except Exception:
                 db.rollback()
+                # 例外を握りつぶすと本番でのみ再現する失敗の原因が追えなくなる
+                # （2026-08-19、retry_requiredが握りつぶされたまま多発した実インシデント）。
+                logger.exception("recognition_v2: card %s attempt %d/2 failed", card_id, attempt + 1)
                 if attempt:
                     card = db.get(BusinessCard, card_id); card.status = "retry_required"; db.commit(); return
 
@@ -254,5 +260,6 @@ async def process_photo_v2(photo_id: str, db: Session) -> None:
         # 先にrollbackしないと、failedを記録するcommitがそれらを一緒に確定させてしまう
         # （向きモデル未配置で1枚目に失敗したとき、OCR前のカードだけが残る）。
         db.rollback()
+        logger.exception("recognition_v2: photo %s processing failed", photo_id)
         photo = db.get(Photo, photo_id)
         photo.status = "failed"; db.commit(); raise exc
