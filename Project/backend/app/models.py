@@ -1,6 +1,6 @@
 import uuid
 from datetime import date, datetime
-from sqlalchemy import Boolean, Date, DateTime, Float, ForeignKey, Integer, JSON, String, Text
+from sqlalchemy import Boolean, Date, DateTime, Float, ForeignKey, Index, Integer, JSON, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 from .database import Base
 
@@ -11,6 +11,10 @@ class Organization(Base):
     __tablename__ = "organizations"
     id: Mapped[str] = mapped_column(String, primary_key=True, default=uid)
     name: Mapped[str] = mapped_column(String, unique=True)
+    # ログイン時に打つ会社コード。作成後は不変（この Organization の全員がこれでログインするため、
+    # 変えた瞬間に全員が入れなくなる）。OrganizationInput にこの列を足してはいけない。
+    # unique と index を両方付けるのは、既存テーブルへ後から張れる独立インデックス形式にするため。
+    code: Mapped[str] = mapped_column(String, unique=True, index=True, default="")
     sharing_mode: Mapped[str] = mapped_column(String, default="isolated")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now)
 
@@ -22,18 +26,27 @@ class Group(Base):
 
 class User(Base):
     """1ユーザは生涯にわたって単一の Organization に属する。所属 Group は
-    UserGroup 側の多対多で、Organization を跨ぐ所属はない前提（docs/identity/CONTEXT.md）。"""
+    UserGroup 側の多対多で、Organization を跨ぐ所属はない前提（docs/identity/CONTEXT.md）。
+
+    ログインIDは Organization 内でのみ一意。各社が admin を使えるようにするためで、
+    どの Organization かは Company Code で指定する（docs/identity/adr/0002）。"""
     __tablename__ = "users"
     id: Mapped[str] = mapped_column(String, primary_key=True, default=uid)
     organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
-    username: Mapped[str] = mapped_column(String, unique=True, index=True)
+    username: Mapped[str] = mapped_column(String)
     name: Mapped[str] = mapped_column(String)
     role: Mapped[str] = mapped_column(String, default="member")  # "admin" | "member"
+    # 運営者（Provider Operator）。role とは直交する能力で、Organization と初期管理者の
+    # 払い出しだけを許す。名刺・連絡先へのアクセスは一切与えない（docs/identity/CONTEXT.md）。
+    is_provider_operator: Mapped[bool] = mapped_column(Boolean, default=False)
     password_hash: Mapped[str] = mapped_column(String)
     totp_secret: Mapped[str] = mapped_column(String)
+    # 招待を完了した時刻。NULL の間はまだ本人が受け取っていないのでログインできない
+    activated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     failed_login_count: Mapped[int] = mapped_column(Integer, default=0)
     locked_until: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now)
+    __table_args__ = (Index("ix_users_org_username", "organization_id", "username", unique=True),)
 
 class UserGroup(Base):
     """User と Group の多対多所属。isolated モードでの閲覧範囲はここに属する全 Group の和集合。"""
@@ -59,6 +72,25 @@ class PendingLogin(Base):
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now)
     expires_at: Mapped[datetime] = mapped_column(DateTime)
+
+class Invitation(Base):
+    """アカウントを本人が受け取るための一回限り・24時間のリンク。
+
+    TOTP秘密鍵をここに置き、完了するまで User.totp_secret には触れないのが要点。
+    発行を純粋に追加的な操作にしておかないと、誤って再招待を押しただけで生きている
+    認証アプリが壊れ、復旧手段が届かなかったそのリンクだけになる。
+    発行時（ページ表示時ではなく）に作るのは、招待ページを再読み込みしても
+    同じ秘密鍵を出し続けるため。"""
+    __tablename__ = "invitations"
+    token_hash: Mapped[str] = mapped_column(String, primary_key=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    totp_secret: Mapped[str] = mapped_column(String)
+    # 他 Organization の運営者が発行することがあるので、AuditLog.user_id と同様に外部キーにしない
+    issued_by_user_id: Mapped[str] = mapped_column(String)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now)
+    expires_at: Mapped[datetime] = mapped_column(DateTime)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 class TrustedDevice(Base):
     """TOTPを一度通過した端末の記憶。90日で自動失効し、revoked_at があれば
