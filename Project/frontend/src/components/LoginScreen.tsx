@@ -3,8 +3,20 @@ import { login, verifyTotp } from '../api';
 
 type Step = 'password' | 'totp';
 
+/** 会社コードは秘密ではないが、スマホで毎回打たせるのは実害のある摩擦なので覚えておく。 */
+const COMPANY_CODE_KEY = 'bcman.companyCode';
+
+function rememberedCompanyCode(): string {
+  try {
+    return window.localStorage.getItem(COMPANY_CODE_KEY) ?? '';
+  } catch {
+    return '';
+  }
+}
+
 export function LoginScreen({ onLoggedIn }: { onLoggedIn: () => void }) {
   const [step, setStep] = useState<Step>('password');
+  const [companyCode, setCompanyCode] = useState(rememberedCompanyCode);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [code, setCode] = useState('');
@@ -16,7 +28,12 @@ export function LoginScreen({ onLoggedIn }: { onLoggedIn: () => void }) {
     setBusy(true);
     setErrorMessage('');
     try {
-      const result = await login(username, password);
+      const result = await login(companyCode, username, password);
+      try {
+        window.localStorage.setItem(COMPANY_CODE_KEY, companyCode.trim().toLowerCase());
+      } catch {
+        // プライベートモード等で保存できなくてもログイン自体は続ける
+      }
       if (result.status === 'totp_required') {
         setStep('totp');
       } else {
@@ -76,6 +93,19 @@ export function LoginScreen({ onLoggedIn }: { onLoggedIn: () => void }) {
       <h2 className="hero__title">ログイン</h2>
       <form className="screen--form" onSubmit={submitPassword}>
         <label className="field">
+          <span className="field__label">会社コード</span>
+          <input
+            className="field__input"
+            type="text"
+            autoComplete="organization"
+            autoCapitalize="none"
+            autoCorrect="off"
+            value={companyCode}
+            onChange={(event) => setCompanyCode(event.target.value)}
+            autoFocus={!companyCode}
+          />
+        </label>
+        <label className="field">
           <span className="field__label">ID</span>
           <input
             className="field__input"
@@ -83,7 +113,7 @@ export function LoginScreen({ onLoggedIn }: { onLoggedIn: () => void }) {
             autoComplete="username"
             value={username}
             onChange={(event) => setUsername(event.target.value)}
-            autoFocus
+            autoFocus={Boolean(companyCode)}
           />
         </label>
         <label className="field">

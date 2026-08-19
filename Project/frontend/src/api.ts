@@ -14,7 +14,9 @@ export type Me = {
   username: string;
   name: string;
   role: Role;
+  is_provider_operator: boolean;
   organization_id: string;
+  company_code: string;
   sharing_mode: string;
   groups: Group[];
   recognition_v2_active: boolean;
@@ -27,7 +29,48 @@ export type OrgUser = {
   username: string;
   name: string;
   role: Role;
+  /** 招待を完了して自分で受け取ったか。false の間はログインできない */
+  activated: boolean;
   groups: string[];
+};
+
+/** 招待を発行したときだけ返る、渡すための情報。画面を閉じたら二度と出さない */
+export type IssuedInvitation = {
+  invitation_url: string;
+  qr_data_url: string;
+  expires_at: string;
+  username: string;
+  name: string;
+};
+
+/** 招待された本人が見る内容。会社コードを知る唯一の機会になる */
+export type InvitationDetail = {
+  organization_name: string;
+  company_code: string;
+  username: string;
+  name: string;
+  otpauth_uri: string;
+  totp_qr_data_url: string;
+  expires_at: string;
+};
+
+export type ProviderOrganization = {
+  id: string;
+  name: string;
+  code: string;
+  sharing_mode: string;
+  created_at: string;
+  user_count: number;
+};
+
+export type AuditEntry = {
+  id: string;
+  user_name: string;
+  action: string;
+  target_type: string;
+  target_id: string;
+  detail: Record<string, unknown>;
+  created_at: string;
 };
 
 export type TrustedDevice = {
@@ -165,8 +208,8 @@ export function photoThumbnailUrl(photoId: string): string {
 
 // --- 認証 ---
 
-export function login(username: string, password: string): Promise<LoginResult> {
-  return request<LoginResult>('/auth/login', jsonInit('POST', { username, password }));
+export function login(companyCode: string, username: string, password: string): Promise<LoginResult> {
+  return request<LoginResult>('/auth/login', jsonInit('POST', { company_code: companyCode, username, password }));
 }
 export function verifyTotp(code: string): Promise<{ status: string }> {
   return request<{ status: string }>('/auth/verify-totp', jsonInit('POST', { code }));
@@ -191,15 +234,16 @@ export function fetchOrgUsers(orgId: string): Promise<OrgUser[]> {
 }
 export function createOrgUser(
   orgId: string,
-  body: { username: string; name: string; password: string; group_ids: string[]; role: Role },
-): Promise<{ id: string; username: string; totp_provisioning_uri: string }> {
-  return request(`/organizations/${orgId}/users`, jsonInit('POST', body));
+  body: { username: string; name: string; group_ids: string[]; role: Role },
+): Promise<IssuedInvitation> {
+  return request<IssuedInvitation>(`/organizations/${orgId}/users`, jsonInit('POST', body));
 }
-export function resetUserPassword(orgId: string, userId: string, password: string): Promise<{ reset: boolean }> {
-  return request(`/organizations/${orgId}/users/${userId}/password`, jsonInit('PUT', { password }));
+/** パスワード忘れも認証アプリ紛失もこれ1つで戻す。本人が自分で設定し直す。 */
+export function reinviteUser(orgId: string, userId: string): Promise<IssuedInvitation> {
+  return request<IssuedInvitation>(`/organizations/${orgId}/users/${userId}/invitations`, { method: 'POST' });
 }
-export function resetUserTotp(orgId: string, userId: string): Promise<{ totp_provisioning_uri: string }> {
-  return request(`/organizations/${orgId}/users/${userId}/reset-totp`, { method: 'POST' });
+export function fetchAuditLogs(orgId: string): Promise<AuditEntry[]> {
+  return request<AuditEntry[]>(`/organizations/${orgId}/audit-logs`);
 }
 export function unlockUser(orgId: string, userId: string): Promise<{ unlocked: boolean }> {
   return request(`/organizations/${orgId}/users/${userId}/unlock`, { method: 'POST' });
@@ -210,6 +254,37 @@ export function fetchUserDevices(orgId: string, userId: string): Promise<Trusted
 export function revokeDevice(orgId: string, deviceId: string): Promise<{ revoked: boolean }> {
   return request(`/organizations/${orgId}/devices/${deviceId}`, { method: 'DELETE' });
 }
+// --- 招待の受け取り（認証不要。トークンの所持が資格情報） ---
+
+export function fetchInvitation(token: string): Promise<InvitationDetail> {
+  return request<InvitationDetail>(`/invitations/${token}`);
+}
+export function completeInvitation(token: string, password: string, code: string): Promise<{ status: string }> {
+  return request(`/invitations/${token}/complete`, jsonInit('POST', { password, code }));
+}
+
+// --- 運営者（Provider Operator）のみ呼び出せる ---
+
+export function fetchProviderOrganizations(): Promise<ProviderOrganization[]> {
+  return request<ProviderOrganization[]>('/provider/organizations');
+}
+export function createProviderOrganization(body: {
+  name: string;
+  code: string;
+  sharing_mode: string;
+  group_name: string;
+  admin_username: string;
+  admin_name: string;
+}): Promise<IssuedInvitation & { organization_id: string; company_code: string }> {
+  return request('/provider/organizations', jsonInit('POST', body));
+}
+export function fetchProviderOrgUsers(orgId: string): Promise<OrgUser[]> {
+  return request<OrgUser[]>(`/provider/organizations/${orgId}/users`);
+}
+export function providerReinvite(orgId: string, userId: string): Promise<IssuedInvitation> {
+  return request<IssuedInvitation>(`/provider/organizations/${orgId}/users/${userId}/invitations`, { method: 'POST' });
+}
+
 /** Card Owner（登録者）選択肢用。自分のOrganizationのUserを、管理者以外でも取得できる。 */
 export function fetchMembers(): Promise<OrgMember[]> {
   return request<OrgMember[]>('/members');

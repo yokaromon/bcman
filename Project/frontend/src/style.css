@@ -264,6 +264,12 @@ body {
   color: var(--warn-ink);
 }
 
+/* 警告ではなく、控えてほしい情報を示す（招待画面の会社コード・IDなど） */
+.alert--info {
+  background: var(--surface-muted, #eef2f7);
+  color: inherit;
+}
+
 /* --- 一覧 --- */
 
 .status-list {
@@ -758,6 +764,23 @@ textarea.field__input {
 .ledger-row__meta {
   color: var(--muted);
   font-size: 0.82rem;
+}
+
+/* 招待QR。スマホのカメラで確実に読める大きさを確保する */
+.invitation__qr {
+  display: block;
+  width: 100%;
+  max-width: 260px;
+  margin: 8px auto;
+  image-rendering: pixelated; /* 拡大しても輪郭がぼけないほうが読み取りやすい */
+  background: #fff;
+  border-radius: 8px;
+}
+
+/* 会社コードとIDは次回以降のログインに必要。控えてもらうので目立たせる */
+.invitation__identity {
+  margin: 4px 0 0;
+  padding-left: 1.2em;
 }
 
 /* 台帳には未確認も並ぶ。ひと目で登録済みと区別が付かないと、確認漏れに気づけない */
