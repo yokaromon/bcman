@@ -9,17 +9,38 @@ Dockerを使わない名刺管理PoCです。`/bcman/` 配下で公開するReac
 
 フロントエンドは `http://localhost:5173/bcman/`、APIは `http://localhost:8000/bcman/api/` です。`backend/.env.example` を `.env` にコピーしてOCR APIを設定してください。
 
-## 初期セットアップ（Organization・管理者アカウント）
+## ログイン
 
-Organizationと初期管理者アカウントの作成にUIはなく、`backend` ディレクトリでCLIを実行します（詳細はリポジトリルートの `docs/identity/CONTEXT.md`、`docs/identity/adr/0001-device-trust-and-totp.md`）。
+ログインには**会社コード・ID・パスワード**の3つが必要です。会社コードは会社ごとの短い文字列で、各社が `admin` のようなIDを使えるようにするためのものです（詳細は `docs/identity/CONTEXT.md` の Company Code）。
+
+初回、未登録の端末・オフィス外のネットワークからだと、続けて認証アプリの6桁コードを求められます。オフィスの固定IPからの許可リストは `Project/deploy/nginx-bcman.conf` の `geo $bcman_trusted_network` で設定します（現在は無効化してあり、常にコードを要求します）。
+
+## アカウントの払い出し（招待方式）
+
+**パスワードを誰かが決めて本人へ伝える経路はありません。** 利用者の追加も、パスワード忘れ・認証アプリ紛失からの復旧も、すべて一回限り・24時間有効の招待リンクで行います（`docs/identity/adr/0002-provider-operated-provisioning-by-invitation.md`）。
+
+- **会社を追加する**: 運営者（`bcman`）でログインし「会社」タブから。会社名・会社コード・初期管理者を入力すると招待QRが出るので、新しい会社の管理者に読んでもらいます
+- **自社に利用者を追加する**: 管理画面の「利用者を追加」。同じく招待QRが出ます
+- **パスワードを忘れた／認証アプリを失くした**: 管理画面で対象の利用者を開き「招待し直す」。本人が自分で設定し直します
+
+招待された人はQRを読むと設定画面が開き、会社コードとIDの提示を受け、認証アプリを登録し、パスワードを決めて完了します。**認証アプリのコードを1回入力してもらうまで完了しません**（登録できていないことに次回ログインで初めて気づく、という事態を防ぐため）。
+
+招待リンクは**それだけでそのアカウントを受け取れてしまう**ので、対面など確実な経路で渡してください。特に復旧の再招待は、既にデータを持つアカウントが対象です。
+
+`PUBLIC_BASE_URL` に**外から見た公開URL**を設定しておく必要があります。招待QRに埋め込む絶対URLの組み立てに使い、社外の人がスマホから到達する先になります。
+
+### 最初の運営者を作る（初回のみ）
+
+UIから会社を作るには運営者が要るので、最初だけ `backend` ディレクトリでCLIを使います。
 
 ```
-poetry run python -m app.cli create-org --name "会社名" --group "一般" --admin-username admin --admin-name "管理者 太郎"
+poetry run python -m app.cli create-org --name "会社名" --code ykr --group "一般" \
+    --admin-username admin --admin-name "管理者 太郎" --provider-operator
 ```
 
-パスワードはその場で入力を求められます。実行するとTOTP（認証アプリ）登録用のURI/QRが一度だけ表示されるので、その場で管理者本人の認証アプリに登録してください。以降のユーザ追加はログイン後の管理画面から行えます。
+パスワードは聞かれません。招待リンクとASCII QRが表示されるので、それを開いて設定してください。既存アカウントに後から運営者権限を与えるときは `grant-provider --company-code ykr --username bcman` を使います（ユーザー名を見た自動付与はしません。改名で別アカウントへ権限が滑るため）。
 
-ログインは初回、未登録の端末・オフィス外のネットワークからだとTOTPコードの入力を求められます。オフィスの固定IPからの許可リストは `Project/deploy/nginx-bcman.conf` の `geo $bcman_trusted_network` で設定します（ローカル開発では未設定のままで構いません）。
+UIへ一切入れなくなったときの最後の手段として `reinvite --company-code ... --username ...` もあります。
 
 ## Recognition Pipeline V2（試験運用中・既定OFF）
 
