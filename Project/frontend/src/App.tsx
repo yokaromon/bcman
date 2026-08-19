@@ -1,15 +1,14 @@
 import { useEffect, useState } from 'react';
 import { fetchMe, logout, type Me } from './api';
 import { CaptureFlow } from './CaptureFlow';
-import { AdminScreen } from './components/AdminScreen';
 import { DirectoryScreen } from './components/directory/DirectoryScreen';
 import { InstallAppButton } from './components/InstallAppButton';
 import { InviteScreen } from './components/InviteScreen';
 import { LEDGER_TAB_LABEL, LedgerScreen } from './components/ledger/LedgerScreen';
 import { LoginScreen } from './components/LoginScreen';
-import { ProviderScreen } from './components/ProviderScreen';
+import { SettingsScreen } from './components/SettingsScreen';
 
-type Tab = 'capture' | 'ledger' | 'directory' | 'admin' | 'provider';
+type Tab = 'capture' | 'ledger' | 'directory' | 'settings';
 
 const INVITE_PREFIX = '/bcman/invite/';
 
@@ -112,8 +111,9 @@ export function App() {
         {tab === 'capture' && <CaptureFlow key={openCount} user={me} />}
         {tab === 'ledger' && <LedgerScreen key={openCount} user={me} />}
         {tab === 'directory' && <DirectoryScreen key={openCount} user={me} />}
-        {tab === 'admin' && me.role === 'admin' && <AdminScreen key={openCount} user={me} />}
-        {tab === 'provider' && me.is_provider_operator && <ProviderScreen key={openCount} />}
+        {tab === 'settings' && (me.role === 'admin' || me.is_provider_operator) && (
+          <SettingsScreen key={openCount} user={me} />
+        )}
       </main>
 
       <nav className="tabbar">
@@ -141,24 +141,14 @@ export function App() {
           <span aria-hidden="true">📇</span>
           名鑑
         </button>
-        {me.role === 'admin' && (
+        {(me.role === 'admin' || me.is_provider_operator) && (
           <button
             type="button"
-            className={tab === 'admin' ? 'tabbar__item tabbar__item--active' : 'tabbar__item'}
-            onClick={() => openTab('admin')}
+            className={tab === 'settings' ? 'tabbar__item tabbar__item--active' : 'tabbar__item'}
+            onClick={() => openTab('settings')}
           >
-            <span aria-hidden="true">👤</span>
-            管理
-          </button>
-        )}
-        {me.is_provider_operator && (
-          <button
-            type="button"
-            className={tab === 'provider' ? 'tabbar__item tabbar__item--active' : 'tabbar__item'}
-            onClick={() => openTab('provider')}
-          >
-            <span aria-hidden="true">🏢</span>
-            会社
+            <span aria-hidden="true">⚙️</span>
+            設定
           </button>
         )}
       </nav>
