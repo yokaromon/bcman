@@ -178,7 +178,14 @@ async def run_ocr_v2(card: BusinessCard, db: Session) -> None:
     card.status = "ocr_processing"; db.commit()
     image_path = Path(card.oriented_image_path or card.corrected_image_path)
     image = detector.read_image(image_path)
-    local_ocr = await asyncio.to_thread(_local_text_pipeline().process, image, server=True)
+    try:
+        local_ocr = await asyncio.to_thread(_local_text_pipeline().process, image, server=True)
+    except Exception:
+        # ローカル検出はalignmentの根拠証拠であって必須ではない。失敗してもykrのOCR/Contact
+        # 構造化自体は続行できる（2026-08-19、この例外を素通しにしてカード全体を落として
+        # いたことがretry_required多発の原因だった実インシデント）。
+        logger.exception("recognition_v2: card %s local text detection failed, continuing without alignment", card.id)
+        local_ocr = {"regions": []}
     client = _ykr_client()
     try:
         stage = await asyncio.to_thread(client.run_ocr, image_path)
