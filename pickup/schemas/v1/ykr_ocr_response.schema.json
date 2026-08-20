@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bcman.local/schemas/v1/ykr_ocr_response.schema.json",
+  "title": "BCMan ykr OCR response v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "lines"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "lines": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["text", "source", "legibility"],
+        "properties": {
+          "text": {"type": ["string", "null"]},
+          "source": {
+            "enum": ["printed", "handwritten", "mixed", "unknown"]
+          },
+          "legibility": {"enum": ["readable", "partial", "unreadable"]}
+        }
+      }
+    }
+  }
+}

@@ -46,6 +46,21 @@ def _arguments() -> argparse.Namespace:
         "--source",
         help="指定した1画像だけを処理します。省略時は入力ディレクトリ直下の全画像です。",
     )
+    parser.add_argument(
+        "--pipeline",
+        choices=("extraction", "orientation", "local", "full"),
+        default="local",
+        help=(
+            "extraction=くり抜きのみ、orientation=向き判定まで、"
+            "local=回転とPaddle OCRまで（既定）、"
+            "full=app.ykr.ltdのOCR/構造化まで"
+        ),
+    )
+    parser.add_argument(
+        "--force-recognition",
+        action="store_true",
+        help="fingerprintが同じ成功済みykr結果も再利用せず、明示的に再認識します。",
+    )
     return parser.parse_args()
 
 
@@ -111,7 +126,13 @@ def _replace_directory(prepared: Path, target: Path) -> None:
             shutil.rmtree(backup)
 
 
-def process_image(source: Path, output_root: Path) -> dict:
+def process_image(
+    source: Path,
+    output_root: Path,
+    *,
+    card_pipeline=None,
+    force_recognition: bool = False,
+) -> dict:
     started = time.perf_counter()
     image = read_image(source)
     detections = detect_cards(image)
@@ -119,6 +140,9 @@ def process_image(source: Path, output_root: Path) -> dict:
     target = output_root / source.stem
     prepared = output_root / f".{source.stem}.tmp-{uuid.uuid4().hex}"
     prepared.mkdir(parents=True, exist_ok=False)
+    previous_history = target / "recognition_history"
+    if previous_history.is_dir():
+        shutil.copytree(previous_history, prepared / "recognition_history")
 
     status = "detected" if detections else "detection_failed"
     result = {
@@ -130,23 +154,49 @@ def process_image(source: Path, output_root: Path) -> dict:
         "processed_at": datetime.now(timezone.utc).isoformat(),
         "detection_elapsed_ms": detection_elapsed_ms,
         "elapsed_ms": None,
+        "pipeline_mode": card_pipeline.mode if card_pipeline else "extraction",
+        "pipeline_status": "not_requested" if card_pipeline is None else None,
         "cards": [],
     }
     try:
         for index, detection in enumerate(detections, 1):
             filename = f"card{index:02d}.png"
-            write_image(
-                prepared / filename,
-                perspective_crop(image, detection.corners),
-            )
-            result["cards"].append(
-                {
+            card_path = prepared / filename
+            write_image(card_path, perspective_crop(image, detection.corners))
+            card_result = {
                     "filename": filename,
                     "corners": _json_corners(detection.corners),
                     "confidence": detection.confidence,
                     "strategy": detection.strategy,
                     "contrast": detection.contrast,
                 }
+            if card_pipeline is not None:
+                try:
+                    card_result["pipeline"] = card_pipeline.process_card(
+                        card_path,
+                        prefix=Path(filename).stem,
+                        previous_dir=target if target.is_dir() else None,
+                        force_recognition=force_recognition,
+                    )
+                except Exception as exc:
+                    card_result["pipeline"] = {
+                        "mode": card_pipeline.mode,
+                        "status": "failed",
+                        "error_type": type(exc).__name__,
+                    }
+            result["cards"].append(card_result)
+        if card_pipeline is not None:
+            pipeline_statuses = [
+                card["pipeline"]["status"] for card in result["cards"]
+            ]
+            result["pipeline_status"] = (
+                "completed"
+                if pipeline_statuses
+                and all(
+                    status in {"completed", "local_completed", "orientation_completed"}
+                    for status in pipeline_statuses
+                )
+                else "partial"
             )
         result["elapsed_ms"] = round((time.perf_counter() - started) * 1000, 2)
         write_image(prepared / "overlay.jpg", _overlay(image, detections))
@@ -169,13 +219,25 @@ def main() -> int:
             raise ValueError(f"処理対象の画像がありません: {args.input_dir}")
         output_root = args.output_dir.resolve()
         output_root.mkdir(parents=True, exist_ok=True)
+        card_pipeline = None
+        if args.pipeline != "extraction":
+            from card_pipeline import PickupCardPipeline
+
+            card_pipeline = PickupCardPipeline(args.pipeline)
         failures = 0
         summary = []
         for source in sources:
             try:
-                result = process_image(source, output_root)
+                result = process_image(
+                    source,
+                    output_root,
+                    card_pipeline=card_pipeline,
+                    force_recognition=args.force_recognition,
+                )
                 summary.append(result)
-                failures += result["status"] != "detected"
+                failures += result["status"] != "detected" or result[
+                    "pipeline_status"
+                ] == "partial"
                 print(
                     f"{source.name}: {len(result['cards'])}枚 "
                     f"({result['elapsed_ms']:.0f} ms, {result['status']})"
@@ -196,6 +258,7 @@ def main() -> int:
                             "status": item["status"],
                             "card_count": len(item["cards"]),
                             "elapsed_ms": item["elapsed_ms"],
+                            "pipeline_status": item["pipeline_status"],
                         }
                         for item in summary
                     ],
@@ -207,7 +270,7 @@ def main() -> int:
             encoding="utf-8",
         )
         return 0 if failures == 0 else 2
-    except ValueError as exc:
+    except (ValueError, RuntimeError) as exc:
         print(str(exc), file=sys.stderr)
         return 2
 

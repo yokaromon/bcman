@@ -1,0 +1,23 @@
+@startuml
+
+title EC Shop Log Sequence\n2026-03-17 04:51:32 - 2026-03-17 05:01:17
+
+skinparam sequenceMessageAlign left
+skinparam maxMessageSize 300
+autonumber
+
+participant "Test" as Test
+participant "DB" as DB
+participant "CartItemCreateView" as CartItemCreateView
+participant "CartModel" as CartModel
+
+Test -> DB : テスト書き込み
+note right: <string>:6
+Test -> DB : Djangoテスト
+note right: <stdin>:7
+CartItemCreateView -> CartModel : カート追加リクエスト: 鶏かわぎょうざ x1
+note right: views.py:36
+CartModel -> CartItemCreateView : カート更新完了: 鶏かわぎょうざ 合計2個 (数量加算)
+note right: views.py:45
+
+@enduml

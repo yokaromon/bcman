@@ -41,6 +41,31 @@ def test_manual_annotation_is_saved_without_detector_output(tmp_path):
     assert document["annotation_method"] == ANNOTATION_METHOD
     assert saved["annotation_method"] == ANNOTATION_METHOD
     assert len(saved["cards"]) == 1
+    assert saved["cards"][0]["ground_truth_card_id"].startswith("card-")
+
+
+def test_card_id_survives_a_small_corner_correction(tmp_path):
+    input_dir = tmp_path / "picture"
+    input_dir.mkdir()
+    source = input_dir / "sample.png"
+    write_image(source, np.full((500, 800, 3), 255, np.uint8))
+    target = tmp_path / "ground_truth.json"
+    first = save_annotation(
+        target,
+        input_dir,
+        source.name,
+        [[[100, 100], [700, 100], [700, 450], [100, 450]]],
+    )
+    second = save_annotation(
+        target,
+        input_dir,
+        source.name,
+        [[[105, 102], [695, 101], [697, 447], [103, 449]]],
+    )
+    assert (
+        second["cards"][0]["ground_truth_card_id"]
+        == first["cards"][0]["ground_truth_card_id"]
+    )
 
 
 def test_manual_annotation_has_no_card_count_ceiling(tmp_path):

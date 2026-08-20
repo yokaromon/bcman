@@ -1,66 +1,216 @@
-# BCMan Card Pickup
+# BCMan Card Pickup / Recognition V2
 
-本番の名刺検出・抽出を置き換える前に、実写真で枚数・四隅・速度を検証する独立環境です。
-画像は個人情報を含むため picture と output はGit管理しません。
+本番を変更する前に、実写真で次のパイプラインを磨き、固定Ground Truthで評価する独立環境です。
 
-## 実行
+1. 名刺の検出と台形補正
+2. 棄権可能なローカル向き判定
+3. ローカル文字領域検出とPaddleOCR診断
+4. 管理対象 `app.ykr.ltd` による最終OCR
+5. 根拠行付きContact構造化とローカル検証
 
-    cd C:\Projects\job\int\aoyagi\source\bcman\pickup
-    poetry install
-    poetry run python C:\Projects\job\int\aoyagi\source\bcman\pickup\bcpickup.py
+実写真、出力、OCR本文、Contact値、新しい向き/OCR Ground Truth、モデル本体、APIキーはGit管理しません。
 
-入力は picture 直下、出力は output/<元画像名>/ です。各出力には
-card01.png、card02.png、検出四隅と処理時間を持つ result.json、
-開発時に枠を確認する overlay.jpg が作られます。再実行時は画像単位で全置換します。
+## ⚠️ Project/backend/app/recognition_v2/ との同期
 
-検出器はローカルCPUだけで動作し、実行時に外部サーバへ接続しません。通常の輪郭検出に
-加え、薄い名刺の色領域、重なりで欠けた輪郭、画面端で閉じない辺を、同じ写真内で既に
-検出した名刺の寸法から復元します。復元後に元輪郭と同一になった候補は重複除去します。
-通常候補が0〜1枚の場合は、中央を前景として大きな1枚を別経路でも探索し、境界支持、
-面積、重なり、スコアを使って通常候補と比較します。通常候補が弱い場合は色領域から
-外周を再探索します。単一／複数を入口で固定分類しないため、中央から外れた1枚や
-複数枚写真では通常経路を維持します。
-複数枚写真では、検出済み名刺の寸法を基準に、外周が低コントラストでも同じ大きさの
-四辺形候補を探索します。白色率、内側暗部率、複数辺の色差・エッジ、同じ形状への
-投票数を組み合わせ、既存名刺の辺を再利用した候補と包含断片を除外します。
-自動検出は1画像あたり最大12枚です。
+`detector.py` / `orientation.py` / `alignment.py` / `text_regions.py` / `recognition_contract.py` /
+`prompts/` / `schemas/` は本番 `Project/backend/app/recognition_v2/` へ移植済みで、**両側が
+同一内容であることを前提にしている**。本番側だけ直して pickup へ戻し忘れると、pickup での
+評価数値と本番の実際の挙動がずれる（2026-08-18に実際に発生：本番のSIGSEGV/std::exception対策を
+先に本番側だけへ入れてしまっていた）。
+
+```
+python ../scripts/check_v2_parity.py
+```
+
+どちらかを直したら、コミット前に必ず実行して揃っているか確認すること。`git config core.hooksPath
+scripts/hooks`（リポジトリルートで一度だけ）を設定していれば、該当ファイルを触るcommitで自動実行される。
+
+## 環境構築
+
+Windows版PaddleはAMD64 Pythonを使います。この環境はPython 3.11 AMD64、
+PaddlePaddle 3.0.0、PaddleOCR/PaddleX 3.0.3に固定しています。
+
+```powershell
+cd C:\Projects\job\int\aoyagi\source\bcman\pickup
+poetry env use C:\Users\kmoto\AppData\Local\Programs\Python\Python311\python.exe
+poetry install
+poetry run python provision_models.py
+poetry run python provision_models.py --verify-only
+```
+
+`provision_models.py` は `model_manifest.json` の固定URLからモデルを取得し、archiveと
+必須ファイルのSHA-256を検証します。通常起動では、完全検証済みmanifest SHA、期待SHA、
+ファイルサイズ、更新時刻が一致するときだけ再ハッシュを省略します。runtime downloadや
+`latest` aliasは使いません。モデルは `models/` へ置かれ、Gitには入りません。
+
+## 実行モード
+
+入力は `picture` 直下、出力は `output/<元画像stem>/` です。`--source` を省略すると
+直下の全画像を処理します。画像単位の一時ディレクトリを完成させてから全置換するため、
+途中失敗した半端な世代は公開されません。
+
+### 抽出だけ
+
+```powershell
+poetry run python bcpickup.py --pipeline extraction
+```
+
+1画像あたり1〜12枚が保証範囲です。13枚以上の人手Ground Truthも保存できますが、検出は
+best effortです。抽出はローカルCPUのみで、外部通信しません。
+
+### 回転とローカルOCRまで（既定）
+
+```powershell
+poetry run python bcpickup.py
+# 同義
+poetry run python bcpickup.py --pipeline local
+```
+
+向き分類器を4回転へ一括適用し、元向きの推定が4/4で整合して閾値を満たすときだけ自動回転
+します。矛盾時だけ4方向のOCR可読性を比較し、僅差なら `uncertain` のまま撮影方向でOCRを
+続けます。アルファベット・数字の非対称字形は可読性スコアの5%以下の補助証拠です。
+
+向きだけを全写真へ通す場合は、OCR成果物を作らない専用モードを使えます。
+
+```powershell
+poetry run python bcpickup.py --pipeline orientation --output-dir orientation_output
+poetry run python evaluate_orientation_consistency.py --output-dir orientation_output --report orientation-consistency.json
+```
+
+人工4回転テストは相対方向の破綻を検出します。絶対に正立しているかは人手GTで別に測ります。
+
+```powershell
+poetry run python evaluate_orientation.py --output-dir orientation_output --dataset-role development --minimum-cards 1
+```
+
+### ykrの最終OCRとContact構造化まで
+
+`pickup/.env.example` を `pickup/.env` へコピーして、固定モデル名とAPIキーを設定します。
+接続先はコード上も `https://app.ykr.ltd` だけを許可します。
+
+```powershell
+poetry run python bcpickup.py --pipeline full
+```
+
+ykr OCRとContact構造化は独立した段階で、それぞれ初回＋1再試行までです。1カード最大4通信、
+90秒timeoutです。成功済みOCRは構造化だけの再試行で再送しません。通常再実行は画像hash、
+向き、モデル、prompt、schemaが同じ成功結果を再利用します。
+
+明示的に再認識するときだけ次を使います。以前のykr成果物は
+`recognition_history/` へ退避され、ユーザー編集値を上書きする用途には使いません。
+
+```powershell
+poetry run python bcpickup.py --pipeline full --force-recognition
+```
+
+APIの通常ログへ画像、request body、OCR本文、Contact値を出す実装はありません。構造・型・
+根拠IDが不正な応答は登録せず、その段階の再試行を1回だけ消費します。一方、形式検証や
+根拠テキスト不一致は値を残してReview Flagにします。
+
+## 出力
+
+各抽出カードは次の形で保存されます。`full` 以外でも全ファイル名を作り、未実行ykr段階は
+`status: not_requested` とします。
+
+```text
+output/IMG_0001/
+  card01.png
+  card01.orientation.json
+  card01.oriented.png
+  card01.ocr.paddle.json
+  card01.ocr.ykr.json
+  card01.contact.paddle.json
+  card01.contact.ykr.json
+  recognition_history/       # 明示的な再認識をした場合
+  overlay.jpg
+  result.json
+```
+
+ローカルPaddleのpolygonとykr行は強制的に混ぜません。一致行は関連付け、ykrだけの行は
+`region_id: null`、ローカルだけの領域は `text: null` として `alignment_status: unmatched`
+で残します。Contactは `present / absent / unreadable`、表示値、候補値、根拠行、ローカル
+正規化値、Review Flagを分離します。メールアドレスがないカードは正常な `absent` です。
+
+## 人手Ground Truth
+
+四隅、向き、OCR/Contactを別々に登録します。四隅GTの各カードには検出順と独立した
+`ground_truth_card_id` が付き、角を微修正してもIoUで同じIDを維持します。
+
+```powershell
+# 原画像上の全名刺の四隅。正解入力数に上限なし
+poetry run python annotate_ground_truth.py --open-browser
+
+# そのまま/右90/180/左90/不明
+poetry run python annotate_orientation.py --open-browser
+
+# 行文字、印刷/手書き、可読性、14 Contact項目の状態と正解表記
+poetry run python annotate_ocr.py --open-browser
+```
+
+AIのfull pipeline成果物を修正用の下書きとして読み込む場合は、次のように起動します。
+下書きは未確認のままではGround Truthや評価対象にならず、人が「確認して保存」したカードだけが
+正解データへ昇格します。
+
+```powershell
+poetry run python annotate_ocr.py --draft-output-dir recognition_output --open-browser
+```
+
+固定holdoutは開発GTとは別ファイルへ作り、3画面すべてへ同じroleを明示します。
+
+```powershell
+poetry run python annotate_ground_truth.py --input-dir holdout_picture --target holdout_extraction_ground_truth.json --dataset-role holdout --open-browser
+poetry run python annotate_orientation.py --input-dir holdout_picture --extraction-ground-truth holdout_extraction_ground_truth.json --target holdout_orientation_ground_truth.json --dataset-role holdout --open-browser
+poetry run python annotate_ocr.py --input-dir holdout_picture --extraction-ground-truth holdout_extraction_ground_truth.json --orientation-ground-truth holdout_orientation_ground_truth.json --target holdout_ocr_ground_truth.json --dataset-role holdout --open-browser
+```
+
+新しい画像を追加した場合、起動中画面を再読み込みすると現在の `picture` を再走査します。
+向き不明を許可し、不明でもOCR Ground Truthと実行結果を登録できます。
 
 ## 評価
 
-検出結果とは独立して、原画像上で人が全名刺の四隅を登録します。
+抽出評価は、全写真の枚数完全一致、全カードIoU 0.90以上、各写真20秒以内を要求します。
 
-    poetry run python annotate_ground_truth.py --open-browser
+```powershell
+poetry run python evaluate.py
+poetry run python evaluate.py --annotated-only  # 開発途中だけ
+```
 
-ブラウザで各名刺を「左上、右上、右下、左下」の順にクリックして保存します。
-検出枠や cardNN.png は正解入力画面に表示しません。検出結果を正解として
-コピーする旧 freeze_ground_truth.py は、循環評価になるため廃止しました。
-Ground Truthの登録枚数には上限を設けません。13枚以上の写真も、人が確認した実数を
-登録します。この場合は自動検出上限を超えたこと自体も評価結果に表示されます。
+向き・OCR・Contactの本番promotion評価は、調整に使わない固定holdout 300ユニークカード以上を
+要求します。回転コピーを別カードには数えません。
 
-全画像を登録した後、次を実行します。
+```powershell
+poetry run python evaluate_recognition.py --engine paddle
+poetry run python evaluate_recognition.py --engine ykr --report recognition-report.json
+```
 
-    poetry run python evaluate.py
+既定は `--dataset-role holdout` です。開発途中の診断だけは
+`--dataset-role development --minimum-cards 0` を明示します。
 
-写真ごとの枚数が完全一致し、全名刺の四角形IoUが0.90以上、かつ各画像の処理時間が
-20秒以内の場合だけ合格です。
-保証範囲は1〜12枚で、13枚以上はGround Truthを保存できますが保証範囲外です。
-未登録画像や、登録後に内容が変わった原画像が1枚でもあれば不合格です。
-入力途中で登録済み画像だけを回帰評価する場合は、全体合格とは区別して次を使います。
+向きは自動確定accuracyとuncertain率、OCRはstrict/正規化CER、Contactは状態accuracyとpresent値の
+正規化完全一致を別々に報告します。各段階が `CONTEXT.md` のAcceptanceを満たすまで
+`Project/backend` へ移植しません。追加学習は固定pretrained baselineの失敗分析後だけ行い、
+holdoutを学習・prompt・閾値調整・モデル選択へ使いません。
 
-    poetry run python evaluate.py --annotated-only
+## 現在地（2026-08-18）
 
-現在追加する画像は開発・回帰テスト用です。本番適用前の30枚以上のホールドアウトは、
-アルゴリズム凍結後まで別管理し、一度も調整に使わずに最終評価します。
+- 抽出→向きの全件再実行: 開発57画像、256カードを生成
+- 抽出評価: 56/57画像が枚数・IoU・時間gateを通過。`IMG_6630.png` は1枚検出だがIoU 0.713で失敗
+  （既知の例外として保留。holdoutでも同種の失敗が出た場合のみ再調査する）
+- 向きの人工4回転整合性: 256/256カード合格（1,024変種、`uncertain` 0）
+- 向きGround Truth（人手）: 256/256カード登録完了。`evaluate_orientation.py --dataset-role
+  development`でauto_accuracy 100%（255/255、`IMG_6630.png`の1カードのみ抽出未達で対象外）、
+  uncertainty 0%、p95 78.32ms。development setの範囲でOrientation Acceptance基準（精度99%
+  以上・uncertain 15%以下・6秒/card以下）を満たした
+- 安定 `ground_truth_card_id`: 256/256一意
+- 実full smoke: 57画像中19画像分をykr本実行済み（`recognition_output/`、ocr.ykr.json 134件成功）
+- OCR/Contact Ground Truth: 3カードのみ登録済み。`evaluate_recognition.py`側の比較バグ
+  （正解値をハイフン等除去前の生表記のまま予測側の`normalized_value`と比較していた）を修正し、
+  修正後は3カード全項目で state_accuracy 1.0 / present_value_accuracy 1.0 を確認。
+  ただしn=3では判断材料として不十分
+- 自動テスト: 66件合格（評価スクリプト修正後の11件再実行含め合格）
 
-## 現在の開発データ結果
-
-2026-08-17時点の `opencv-multipass-v30` では、入力57画像をすべて再生成済みです。
-人手Ground Truth登録済み57画像はすべて、枚数完全一致、全IoU 0.90以上、各画像20秒以内です。
-最低IoUは0.900、現在の最大処理時間はIMG_6669.pngの16,506msです。
-低コントラストの複数枚写真では、欠けた投影候補を面積が回復する線候補だけで置換し、
-重なりクラスタから落ちた非重複候補を復元します。大写し1枚では中央起点と色領域起点の
-再探索を追加し、同種の線候補同士のスコア差だけでは置換しません。
-IMG_6622.pngは12枚、IMG_6626.pngは11枚を正しく抽出しています。
-
-開発画像は調整に使用済みなので、本番マージ判定には別の30画像以上の未見ホールドアウトが
-必要です。
+development setでの向き判定はAcceptance基準をクリアしたと判断。次のpromotion blockerは、
+development 256カードとは別の未見300カード固定holdoutへの四隅・向き・OCR/Contact人手登録と
+Acceptance評価です（現在着手中）。
+本番統合はADR 0019どおりfeature flagを既定OFFで行い、既存カードを再処理せず、V1をrollback
+経路として残します。

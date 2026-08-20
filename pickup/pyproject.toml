@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "bcman-card-pickup"
 version = "0.1.0"
-description = "Standalone business-card detection and perspective extraction evaluator"
+description = "Pinned business-card extraction, orientation, OCR and contact evaluation pipeline"
 authors = ["BCMan"]
 package-mode = false
 
@@ -9,9 +9,22 @@ package-mode = false
 python = "^3.11"
 numpy = "^2.0"
 opencv-python-headless = "^4.10.0"
+paddlepaddle = {version = "3.0.0", source = "paddle-cpu"}
+paddleocr = "3.0.3"
+paddlex = {version = "3.0.3", extras = ["ie", "multimodal", "ocr"]}
+jsonschema = "4.25.1"
+langchain = "0.3.30"
+langchain-community = "0.3.31"
+langchain-openai = "0.3.35"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.0"
+
+
+[[tool.poetry.source]]
+name = "paddle-cpu"
+url = "https://www.paddlepaddle.org.cn/packages/stable/cpu/"
+priority = "explicit"
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

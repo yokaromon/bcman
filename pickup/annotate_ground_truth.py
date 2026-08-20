@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import json
 import os
+import uuid
 import webbrowser
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -31,11 +32,11 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _new_document() -> dict:
+def _new_document(dataset_role: str = "development") -> dict:
     return {
         "schema_version": SCHEMA_VERSION,
         "annotation_method": ANNOTATION_METHOD,
-        "dataset_role": "development",
+        "dataset_role": dataset_role,
         "images": {},
     }
 
@@ -90,6 +91,86 @@ def _validated_cards(cards: object, width: int, height: int) -> list[dict]:
     return validated
 
 
+def _card_iou(left: list, right: list) -> float:
+    a = ordered_corners(np.float32(left).reshape(4, 2))
+    b = ordered_corners(np.float32(right).reshape(4, 2))
+    intersection, _ = cv2.intersectConvexConvex(a, b)
+    union = abs(float(cv2.contourArea(a))) + abs(float(cv2.contourArea(b))) - intersection
+    return float(intersection) / max(1.0, union)
+
+
+def _assign_card_ids(validated: list[dict], existing: list[dict]) -> list[dict]:
+    candidates = sorted(
+        (
+            (_card_iou(card["corners"], old.get("corners", [])), new_index, old_index)
+            for new_index, card in enumerate(validated)
+            for old_index, old in enumerate(existing)
+            if len(old.get("corners", [])) == 4 and old.get("ground_truth_card_id")
+        ),
+        reverse=True,
+    )
+    used_new: set[int] = set()
+    used_old: set[int] = set()
+    for score, new_index, old_index in candidates:
+        if score < 0.50:
+            break
+        if new_index in used_new or old_index in used_old:
+            continue
+        validated[new_index]["ground_truth_card_id"] = existing[old_index][
+            "ground_truth_card_id"
+        ]
+        used_new.add(new_index)
+        used_old.add(old_index)
+    for index, card in enumerate(validated):
+        if index not in used_new:
+            card["ground_truth_card_id"] = f"card-{uuid.uuid4().hex}"
+    return validated
+
+
+def initialize_dataset_role(target: Path, dataset_role: str) -> dict:
+    if dataset_role not in {"development", "holdout"}:
+        raise ValueError("dataset_roleはdevelopmentまたはholdoutです")
+    if target.exists():
+        document = _load_document(target)
+        if document.get("dataset_role") != dataset_role:
+            raise ValueError(
+                f"既存GTはdataset_role={document.get('dataset_role')}です"
+            )
+        return document
+    document = _new_document(dataset_role)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    temporary = target.with_name(f".{target.name}.tmp-{os.getpid()}")
+    temporary.write_text(
+        json.dumps(document, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+    os.replace(temporary, target)
+    return document
+
+
+def ensure_card_ids(target: Path) -> dict:
+    """既存GTに欠けている安定カードIDを一度だけ付与し、原子的に保存する。"""
+    document = _load_document(target)
+    changed = False
+    seen: set[str] = set()
+    for annotation in document["images"].values():
+        for card in annotation.get("cards", []):
+            card_id = card.get("ground_truth_card_id")
+            if not card_id or card_id in seen:
+                card_id = f"card-{uuid.uuid4().hex}"
+                card["ground_truth_card_id"] = card_id
+                changed = True
+            seen.add(card_id)
+    if changed:
+        document["updated_at"] = datetime.now(timezone.utc).isoformat()
+        temporary = target.with_name(f".{target.name}.tmp-{os.getpid()}")
+        temporary.write_text(
+            json.dumps(document, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        os.replace(temporary, target)
+    return document
+
+
 def save_annotation(
     target: Path,
     input_dir: Path,
@@ -102,8 +183,11 @@ def save_annotation(
     source = sources[source_name]
     image = read_image(source)
     height, width = image.shape[:2]
-    validated = _validated_cards(cards, width, height)
     document = _load_document(target)
+    validated = _assign_card_ids(
+        _validated_cards(cards, width, height),
+        document["images"].get(source.name, {}).get("cards", []),
+    )
     document["updated_at"] = datetime.now(timezone.utc).isoformat()
     document["images"][source.name] = {
         "source_sha256": _sha256(source),
@@ -249,8 +333,6 @@ fetch("/api/state").then(r=>r.json()).then(data=>{state=data;files.innerHTML=sta
 
 
 def _handler(input_dir: Path, target: Path):
-    sources = {path.name: path for path in _source_images(input_dir)}
-
     class Handler(BaseHTTPRequestHandler):
         def _send(self, status: int, body: bytes, content_type: str) -> None:
             self.send_response(status)
@@ -280,7 +362,9 @@ def _handler(input_dir: Path, target: Path):
                 return
             if parsed.path.startswith("/image/"):
                 name = unquote(parsed.path[len("/image/"):])
-                source = sources.get(name)
+                source = {
+                    path.name: path for path in _source_images(input_dir)
+                }.get(name)
                 if source is None:
                     self._send_json(404, {"error": "画像がありません"})
                     return
@@ -319,12 +403,17 @@ def main() -> int:
     parser.add_argument("--target", type=Path, default=DEFAULT_TARGET)
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--open-browser", action="store_true")
+    parser.add_argument(
+        "--dataset-role",
+        choices=("development", "holdout"),
+        default="development",
+    )
     args = parser.parse_args()
     input_dir = args.input_dir.resolve()
     target = args.target.resolve()
     if not _source_images(input_dir):
         parser.error(f"対象画像がありません: {input_dir}")
-    _load_document(target)
+    initialize_dataset_role(target, args.dataset_role)
     address = ("127.0.0.1", args.port)
     server = ThreadingHTTPServer(address, _handler(input_dir, target))
     url = f"http://{address[0]}:{address[1]}/"

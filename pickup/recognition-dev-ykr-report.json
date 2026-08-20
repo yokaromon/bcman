@@ -1,0 +1,253 @@
+{
+  "schema_version": 1,
+  "engine": "ykr",
+  "minimum_cards": 0,
+  "required_dataset_role": "development",
+  "annotated_unique_cards": 3,
+  "mapped_cards": 3,
+  "orientation": {
+    "known": 3,
+    "auto_confirmed": 3,
+    "auto_correct": 3,
+    "auto_wrong": 0,
+    "uncertain": 0,
+    "auto_accuracy": 1.0,
+    "uncertainty_rate": 0.0
+  },
+  "ocr": {
+    "cards": 3,
+    "strict_character_errors": 0,
+    "strict_expected_characters": 757,
+    "normalized_character_errors": 0,
+    "normalized_expected_characters": 689,
+    "strict_cer": 0.0,
+    "normalized_cer": 0.0
+  },
+  "contact": {
+    "states": 42,
+    "state_correct": 42,
+    "present_values": 29,
+    "value_correct": 29,
+    "absent_fields": 13,
+    "hallucinated_absent": 0,
+    "unreadable_fields": 0,
+    "unreadable_review_flagged": 0,
+    "unsupported_candidates": 0,
+    "per_field": {
+      "company_name": {
+        "present": 3,
+        "value_correct": 3,
+        "accuracy": 1.0
+      },
+      "department": {
+        "present": 3,
+        "value_correct": 3,
+        "accuracy": 1.0
+      },
+      "position": {
+        "present": 2,
+        "value_correct": 2,
+        "accuracy": 1.0
+      },
+      "person_name": {
+        "present": 3,
+        "value_correct": 3,
+        "accuracy": 1.0
+      },
+      "postal_code": {
+        "present": 3,
+        "value_correct": 3,
+        "accuracy": 1.0
+      },
+      "address": {
+        "present": 3,
+        "value_correct": 3,
+        "accuracy": 1.0
+      },
+      "telephone": {
+        "present": 3,
+        "value_correct": 3,
+        "accuracy": 1.0
+      },
+      "fax": {
+        "present": 3,
+        "value_correct": 3,
+        "accuracy": 1.0
+      },
+      "email": {
+        "present": 2,
+        "value_correct": 2,
+        "accuracy": 1.0
+      },
+      "website": {
+        "present": 3,
+        "value_correct": 3,
+        "accuracy": 1.0
+      },
+      "mobile": {
+        "present": 1,
+        "value_correct": 1,
+        "accuracy": 1.0
+      }
+    },
+    "notes_character_errors": 0,
+    "notes_expected_characters": 0,
+    "state_accuracy": 1.0,
+    "present_value_accuracy": 1.0,
+    "notes_cer": 0.0
+  },
+  "pipeline": {
+    "measured_cards": 3,
+    "p95_elapsed_ms": 26920.78
+  },
+  "acceptance": {
+    "passed": false,
+    "checks": [
+      {
+        "name": "holdout_unique_cards",
+        "passed": true,
+        "actual": 3,
+        "target": ">=0"
+      },
+      {
+        "name": "all_annotated_cards_mapped",
+        "passed": true,
+        "actual": 3,
+        "target": "3"
+      },
+      {
+        "name": "orientation_auto_accuracy",
+        "passed": true,
+        "actual": 1.0,
+        "target": ">=0.99"
+      },
+      {
+        "name": "orientation_uncertainty_rate",
+        "passed": true,
+        "actual": 0.0,
+        "target": "<=0.15"
+      },
+      {
+        "name": "ocr_normalized_cer",
+        "passed": true,
+        "actual": 0.0,
+        "target": "<=0.02"
+      },
+      {
+        "name": "contact_company_name",
+        "passed": true,
+        "actual": 1.0,
+        "target": ">=0.99"
+      },
+      {
+        "name": "contact_email",
+        "passed": true,
+        "actual": 1.0,
+        "target": ">=0.99"
+      },
+      {
+        "name": "contact_fax",
+        "passed": true,
+        "actual": 1.0,
+        "target": ">=0.99"
+      },
+      {
+        "name": "contact_mobile",
+        "passed": true,
+        "actual": 1.0,
+        "target": ">=0.99"
+      },
+      {
+        "name": "contact_person_name",
+        "passed": true,
+        "actual": 1.0,
+        "target": ">=0.99"
+      },
+      {
+        "name": "contact_postal_code",
+        "passed": true,
+        "actual": 1.0,
+        "target": ">=0.99"
+      },
+      {
+        "name": "contact_telephone",
+        "passed": true,
+        "actual": 1.0,
+        "target": ">=0.99"
+      },
+      {
+        "name": "contact_website",
+        "passed": true,
+        "actual": 1.0,
+        "target": ">=0.99"
+      },
+      {
+        "name": "contact_address",
+        "passed": true,
+        "actual": 1.0,
+        "target": ">=0.95"
+      },
+      {
+        "name": "contact_department",
+        "passed": true,
+        "actual": 1.0,
+        "target": ">=0.95"
+      },
+      {
+        "name": "contact_position",
+        "passed": true,
+        "actual": 1.0,
+        "target": ">=0.95"
+      },
+      {
+        "name": "absent_hallucinations",
+        "passed": true,
+        "actual": 0,
+        "target": "0"
+      },
+      {
+        "name": "pipeline_p95_elapsed_ms",
+        "passed": true,
+        "actual": 26920.78,
+        "target": "<=30000"
+      }
+    ]
+  },
+  "problems": [
+    "IMG_6638.png: result.jsonなし",
+    "IMG_6637.png: result.jsonなし",
+    "IMG_6636.png: result.jsonなし",
+    "IMG_6635.png: result.jsonなし",
+    "IMG_6630.png card-6735ffe0f2d5469c850c3b38e256ce5e: IoU>=0.90対応なし",
+    "IMG_6639.png: result.jsonなし",
+    "IMG_6655.png: result.jsonなし",
+    "IMG_6654.png: result.jsonなし",
+    "IMG_6653.png: result.jsonなし",
+    "IMG_6652.png: result.jsonなし",
+    "IMG_6651.png: result.jsonなし",
+    "IMG_6650.png: result.jsonなし",
+    "IMG_6648.png: result.jsonなし",
+    "IMG_6647.png: result.jsonなし",
+    "IMG_6646.png: result.jsonなし",
+    "IMG_6649.png: result.jsonなし",
+    "IMG_6662.png: result.jsonなし",
+    "IMG_6661.png: result.jsonなし",
+    "IMG_6660.png: result.jsonなし",
+    "IMG_6659.png: result.jsonなし",
+    "IMG_6658.png: result.jsonなし",
+    "IMG_6657.png: result.jsonなし",
+    "IMG_6656.png: result.jsonなし",
+    "IMG_6672.png: result.jsonなし",
+    "IMG_6671.png: result.jsonなし",
+    "IMG_6670.png: result.jsonなし",
+    "IMG_6669.png: result.jsonなし",
+    "IMG_6668.png: result.jsonなし",
+    "IMG_6667.png: result.jsonなし",
+    "IMG_6666.png: result.jsonなし"
+  ],
+  "dataset_roles": {
+    "extraction": "development",
+    "orientation": "development",
+    "ocr": "development"
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "minimum_cards": 1,
+  "required_dataset_role": "development",
+  "annotated_cards": 256,
+  "evaluated_known_cards": 255,
+  "indeterminate_cards": 0,
+  "auto_confirmed": 255,
+  "auto_correct": 255,
+  "auto_wrong": 0,
+  "uncertain": 0,
+  "problems": [
+    "IMG_6630.png card-6735ffe0f2d5469c850c3b38e256ce5e: IoU>=0.90対応なし",
+    "card-6735ffe0f2d5469c850c3b38e256ce5e: IoU>=0.90の抽出結果なし"
+  ],
+  "wrong_cards": [],
+  "dataset_roles": {
+    "extraction": "development",
+    "orientation": "development"
+  },
+  "auto_accuracy": 1.0,
+  "uncertainty_rate": 0.0,
+  "p95_elapsed_ms": 78.32,
+  "acceptance_checks": {
+    "minimum_cards": true,
+    "auto_accuracy": true,
+    "uncertainty_rate": true,
+    "p95_elapsed_ms": true
+  },
+  "passed": false
+}

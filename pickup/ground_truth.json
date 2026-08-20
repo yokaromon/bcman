@@ -30,7 +30,8 @@
               1641.73,
               1545.19
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-a7fea4c001814f548ca55ae1779fa78c"
         },
         {
           "corners": [
@@ -50,7 +51,8 @@
               3514.87,
               1421.11
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-a901a566059644f394a5cefc74873256"
         },
         {
           "corners": [
@@ -70,7 +72,8 @@
               4194.41,
               3654.7
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-a2765e9d6b7a4c06a10d82eaf9054e38"
         },
         {
           "corners": [
@@ -90,7 +93,8 @@
               3065.79,
               3766.97
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-5971cef9a96f4b6f959127635fb8c4eb"
         },
         {
           "corners": [
@@ -110,7 +114,8 @@
               790.83,
               3696.06
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-b31e39f0e0cf42ca9c609cc2826ee0d9"
         }
       ]
     },
@@ -141,7 +146,8 @@
               741.75,
               3550.94
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-66f1676774164b8ba773feb93767953f"
         }
       ]
     },
@@ -172,7 +178,8 @@
               412.64,
               1894.81
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-1bc086bc55554552be6e98243fc3bfb9"
         },
         {
           "corners": [
@@ -192,7 +199,8 @@
               2327.15,
               1808.14
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-1fe502f2cede41b798dea8f32e09a097"
         },
         {
           "corners": [
@@ -212,7 +220,8 @@
               2374.42,
               3312.96
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-7a412e19f8b14301ac9dac0d2738fd6b"
         },
         {
           "corners": [
@@ -232,7 +241,8 @@
               247.19,
               3123.87
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-00224944410a457bbda9218a3fa86eff"
         },
         {
           "corners": [
@@ -252,7 +262,8 @@
               672.64,
               4770.5
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-466bd06ae0fd4c9f9a3984ccfa4cd2f7"
         }
       ]
     },
@@ -283,7 +294,8 @@
               1815.04,
               1816.02
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-3764cb897f104d08887cf2a4bb0fd2d6"
         },
         {
           "corners": [
@@ -303,7 +315,8 @@
               1531.41,
               2887.51
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-6b8bb14742094bba8274ad25892cae3f"
         },
         {
           "corners": [
@@ -323,7 +336,8 @@
               1247.78,
               3691.13
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-b86c3715ffab4896bf85f32b86298e97"
         },
         {
           "corners": [
@@ -343,7 +357,8 @@
               1326.56,
               4802.02
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-c591e56f57964313a81c54cace534d56"
         }
       ]
     },
@@ -374,7 +389,8 @@
               402.5,
               2755.66
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-591d684b14cc473c86b0914cc8ed8ed1"
         }
       ]
     },
@@ -405,7 +421,8 @@
               591.59,
               3367.42
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-f241a48eb76f4e56871254b737488076"
         }
       ]
     },
@@ -436,7 +453,8 @@
               941.96,
               3122.71
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-2496dc17162647e79af9d14453b46053"
         }
       ]
     },
@@ -467,7 +485,8 @@
               447.0,
               1209.6
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-3a4148b11aad48e0ba077925f59c7bf8"
         },
         {
           "corners": [
@@ -487,7 +506,8 @@
               252.35,
               3267.31
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-03dd61e314274a47a78913fe3f267dac"
         }
       ]
     },
@@ -518,7 +538,8 @@
               218.98,
               2499.84
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-32608c3f68cb4ad6ac719e89f0efe6b2"
         }
       ]
     },
@@ -549,7 +570,8 @@
               252.35,
               2761.22
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-5379af759e154704864bb834fa92ac4a"
         }
       ]
     },
@@ -580,7 +602,8 @@
               541.54,
               2505.4
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-dee8e1d81c8b4a1b858166b02d56ef74"
         }
       ]
     },
@@ -611,7 +634,8 @@
               636.08,
               1865.84
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-1b25a81cc12240ad860a064b524bb6df"
         },
         {
           "corners": [
@@ -631,7 +655,8 @@
               541.54,
               2855.77
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-20a16ed490214edc83ca83c32765304c"
         }
       ]
     },
@@ -662,7 +687,8 @@
               202.3,
               3128.28
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-816d7283d85f4d6eaee2be570241add5"
         }
       ]
     },
@@ -693,7 +719,8 @@
               63.26,
               2683.37
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-77c5e2de4e7d481aab945c3a70bd95fd"
         }
       ]
     },
@@ -724,7 +751,8 @@
               1434.91,
               1834.73
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-bdf6890b59a9420d90f2bf883912084f"
         },
         {
           "corners": [
@@ -744,7 +772,8 @@
               1163.1,
               2726.99
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-68e1e0374c274514abc248adc2688b54"
         },
         {
           "corners": [
@@ -764,7 +793,8 @@
               2173.54,
               1858.37
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-df206a66bf244de091e7c6cfcfa7ace7"
         },
         {
           "corners": [
@@ -784,7 +814,8 @@
               3302.15,
               2212.91
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-28dbd982a6a34637898c827741719efc"
         },
         {
           "corners": [
@@ -804,7 +835,8 @@
               3763.05,
               3128.8
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-b8ee07ca2b9e41ad836fcb92efdef5bb"
         }
       ]
     },
@@ -835,7 +867,8 @@
               647.21,
               3617.68
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-6735ffe0f2d5469c850c3b38e256ce5e"
         }
       ]
     },
@@ -866,7 +899,8 @@
               1633.83,
               547.56
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-5a5b06b7cf644117b63eec2152a0d014"
         },
         {
           "corners": [
@@ -886,7 +920,8 @@
               2736.84,
               1650.57
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-b87208eda49446cf9d5cccf4f3dbc55d"
         },
         {
           "corners": [
@@ -906,7 +941,8 @@
               3122.89,
               3202.66
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-a9c240c52b09481682cb7bc39b5b1748"
         },
         {
           "corners": [
@@ -926,7 +962,8 @@
               2697.44,
               4289.91
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-336fc85cde02497e8422edc4c93570ab"
         },
         {
           "corners": [
@@ -946,7 +983,8 @@
               1767.77,
               5700.18
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-46ec6a2fae20423d9a69e41a1c11db9d"
         },
         {
           "corners": [
@@ -966,7 +1004,8 @@
               1507.77,
               4376.57
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-f0d1483ddf784a58932e900aa5c5cc82"
         },
         {
           "corners": [
@@ -986,7 +1025,8 @@
               649.0,
               4108.7
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-a894ff2c8f714c2c8485f5446c108d6c"
         },
         {
           "corners": [
@@ -1006,7 +1046,8 @@
               404.76,
               2706.31
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-125d9feb6db745478095ee74f6404641"
         },
         {
           "corners": [
@@ -1026,7 +1067,8 @@
               1492.01,
               2036.62
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-70ab2fa64cba4a7b8fa89425adddd713"
         },
         {
           "corners": [
@@ -1046,7 +1088,8 @@
               1555.04,
               3179.02
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-d098241fa69748c58f712bc176f0f247"
         }
       ]
     },
@@ -1077,7 +1120,8 @@
               341.74,
               1942.08
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-c0ffd66b2135485aa06cbd976973c0a1"
         },
         {
           "corners": [
@@ -1097,7 +1141,8 @@
               2350.78,
               1816.02
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-1a546827e2514f42b7d1feeb69a865cc"
         },
         {
           "corners": [
@@ -1117,7 +1162,8 @@
               2484.72,
               3186.9
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-faaa94c50d22456e9f48db3b2b2ee032"
         },
         {
           "corners": [
@@ -1137,7 +1183,8 @@
               1381.71,
               4597.18
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-38d9f0022bb94b01adb564ee5dd8c5d9"
         },
         {
           "corners": [
@@ -1157,7 +1204,8 @@
               270.83,
               3179.02
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-aa02ea76a0cd4bb186cdc9609081f15a"
         }
       ]
     },
@@ -1188,7 +1236,8 @@
               688.39,
               1319.67
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-80f7bbcf0cdd4f32b8d20e2105399323"
         },
         {
           "corners": [
@@ -1208,7 +1257,8 @@
               2839.26,
               2068.14
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-7339459f1ed546a79188cf3c2d3095fe"
         },
         {
           "corners": [
@@ -1228,7 +1278,8 @@
               2665.93,
               3265.69
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-28c1e875cf15433391bc9c9751e0c056"
         },
         {
           "corners": [
@@ -1248,7 +1299,8 @@
               2342.9,
               4384.45
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-7ec867d754d54565b88065a9093deac6"
         },
         {
           "corners": [
@@ -1268,7 +1320,8 @@
               1019.3,
               4108.7
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-992cec9d8f3f4b4aa44aac4a19cc7886"
         },
         {
           "corners": [
@@ -1288,7 +1341,8 @@
               168.41,
               2178.44
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-4072ff99f8e4447cbe1a448003a6c063"
         }
       ]
     },
@@ -1319,7 +1373,8 @@
               1239.92,
               2088.82
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-277c7bf455844599b3e698f8e1f4af3c"
         },
         {
           "corners": [
@@ -1339,7 +1394,8 @@
               2084.9,
               1870.19
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-ffa323c4fc454e3ab77095290a204320"
         },
         {
           "corners": [
@@ -1359,7 +1415,8 @@
               3095.34,
               1722.46
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-ff59a0c5796b4e2e85145e3ef6600320"
         },
         {
           "corners": [
@@ -1379,7 +1436,8 @@
               2179.44,
               2573.35
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-ba48a2e1842f41af873b95a8ced19bf2"
         },
         {
           "corners": [
@@ -1399,7 +1457,8 @@
               3089.43,
               2254.27
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-9ace2d19e0a54678acee8010313d5bb3"
         },
         {
           "corners": [
@@ -1419,7 +1478,8 @@
               3272.61,
               3069.71
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-2f6354988c814c6cb2d86218c6fa33be"
         },
         {
           "corners": [
@@ -1439,7 +1499,8 @@
               2244.44,
               3217.43
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-b416399670c94b3fa0ba5608f6a11eb9"
         },
         {
           "corners": [
@@ -1459,7 +1520,8 @@
               1228.1,
               2626.54
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-6a9b5f4697d440349dea6cfe9bea05f4"
         },
         {
           "corners": [
@@ -1479,7 +1541,8 @@
               1251.73,
               3258.79
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-edcc782253074a289ccf986afc1af11d"
         }
       ]
     },
@@ -1510,7 +1573,8 @@
               830.21,
               1879.05
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-cd40080e90d44efdb5e2fda359b53272"
         },
         {
           "corners": [
@@ -1530,7 +1594,8 @@
               2019.88,
               1918.44
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-584735748f3442df8a06ad568c89cdb3"
         },
         {
           "corners": [
@@ -1550,7 +1615,8 @@
               3028.34,
               2359.65
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-d7595ecd8e924c75810b43f6ffb5cc26"
         },
         {
           "corners": [
@@ -1570,7 +1636,8 @@
               3311.98,
               4108.7
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-7d8e141bfe7f42d2a6426f80a99d9067"
         },
         {
           "corners": [
@@ -1590,7 +1657,8 @@
               2327.15,
               4581.42
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-1273c68c00ce45f68c27ff16e0199ce3"
         },
         {
           "corners": [
@@ -1610,7 +1678,8 @@
               1310.81,
               4549.9
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-f9741560289148529e960ce355855e79"
         },
         {
           "corners": [
@@ -1630,7 +1699,8 @@
               459.91,
               3880.22
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-0ed732699d1644bf9c3a3415663bba1b"
         },
         {
           "corners": [
@@ -1650,7 +1720,8 @@
               1365.96,
               2982.06
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-8d594788f4544e8f81847ea9089f84b6"
         },
         {
           "corners": [
@@ -1670,7 +1741,8 @@
               2051.4,
               3123.87
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-5dde18f94e804beea2eb32b0ca875968"
         },
         {
           "corners": [
@@ -1690,7 +1762,8 @@
               160.53,
               2848.12
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-98079beb3e854e5cbc1ee811fbd5e9ce"
         }
       ]
     },
@@ -1721,7 +1794,8 @@
               1239.92,
               694.3
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-194cf0046a704ba3b8ea5ad69854187d"
         },
         {
           "corners": [
@@ -1741,7 +1815,8 @@
               3833.96,
               1042.93
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-78498970d1524ed3ae31532d6b0fb7cc"
         },
         {
           "corners": [
@@ -1761,7 +1836,8 @@
               3893.05,
               2012.0
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-8880238c5cfa4bbca63e8160ffa3fc4f"
         },
         {
           "corners": [
@@ -1781,7 +1857,8 @@
               4158.95,
               3235.16
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-82ff3652ec2144e99118b3b5ccff96b9"
         },
         {
           "corners": [
@@ -1801,7 +1878,8 @@
               2492.62,
               1864.28
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-854d68f5b2db49b99b775ccb6c905420"
         },
         {
           "corners": [
@@ -1821,7 +1899,8 @@
               2646.25,
               2886.53
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-6ed7623b559143dcb648222490afd72e"
         },
         {
           "corners": [
@@ -1841,7 +1920,8 @@
               2734.89,
               3554.24
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-57d76ae854f6406d862238845138a079"
         },
         {
           "corners": [
@@ -1861,7 +1941,8 @@
               932.65,
               3778.78
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-dc64bfd4cce849a383ca743f75458f6e"
         },
         {
           "corners": [
@@ -1881,7 +1962,8 @@
               920.83,
               2596.99
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-9f9716b3fec440fb86bd942cdd087c13"
         },
         {
           "corners": [
@@ -1901,7 +1983,8 @@
               631.29,
               1379.74
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-7b7f1947e79d4c7786f3de0f8438ce6d"
         }
       ]
     },
@@ -1932,7 +2015,8 @@
               1984.45,
               1486.1
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-1b3887cc11e1498d92f5427bd05aad79"
         },
         {
           "corners": [
@@ -1952,7 +2036,8 @@
               3266.7,
               1486.1
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-0ff3a637dccb413cb8e55881ac90927e"
         },
         {
           "corners": [
@@ -1972,7 +2057,8 @@
               3107.15,
               3441.97
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-95a67aa3e8fe4ccd8de4a58a77ede6bf"
         },
         {
           "corners": [
@@ -1992,7 +2078,8 @@
               1919.45,
               2939.71
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-6a64c049e87c4fe985644e7f9ede7fa2"
         },
         {
           "corners": [
@@ -2012,7 +2099,8 @@
               991.74,
               3489.24
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-a4ec9e37a6fd4098a5b95f85e246d372"
         }
       ]
     },
@@ -2043,7 +2131,8 @@
               2073.08,
               1456.56
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-2764e4e4cba3425788aa29117e49fc80"
         },
         {
           "corners": [
@@ -2063,7 +2152,8 @@
               2268.08,
               3506.97
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-d0d4cfda37564d10b1271d2ba2dabff7"
         },
         {
           "corners": [
@@ -2083,7 +2173,8 @@
               832.2,
               3264.7
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-5ca747f9ac54422686555ded215adb51"
         }
       ]
     },
@@ -2114,7 +2205,8 @@
               1712.64,
               1568.83
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-4bc61f70948a48d4aa3994d67818afed"
         },
         {
           "corners": [
@@ -2134,7 +2226,8 @@
               2776.25,
               1568.83
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-b641e096f4cf4f4a8942a329b0085076"
         },
         {
           "corners": [
@@ -2154,7 +2247,8 @@
               2593.07,
               3814.24
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-79115d6370b24b4184f60d285a972875"
         },
         {
           "corners": [
@@ -2174,7 +2268,8 @@
               1180.83,
               3258.79
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-4f18dd5dc6ea4e62b92199aca19eb370"
         }
       ]
     },
@@ -2205,7 +2300,8 @@
               2031.72,
               1651.56
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-8cc3c19569ac4192a7edc40ed109dcd4"
         },
         {
           "corners": [
@@ -2225,7 +2321,8 @@
               2799.89,
               1763.83
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-5b6ab86a22bc4b5f92c225946d4a955e"
         },
         {
           "corners": [
@@ -2245,7 +2342,8 @@
               3940.32,
               2224.73
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-4519a3db66ad494eaf13c6a10305618a"
         },
         {
           "corners": [
@@ -2265,7 +2363,8 @@
               2409.9,
               3376.97
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-eb6db4c2d800407aab8a2f9de3c8fa16"
         },
         {
           "corners": [
@@ -2285,7 +2384,8 @@
               1848.54,
               3371.06
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-9557c1c852c34e4ebf061d134913de7f"
         },
         {
           "corners": [
@@ -2305,7 +2405,8 @@
               773.11,
               2478.81
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-d81bd62d289a45378ee7c80cfc1ac3d0"
         }
       ]
     },
@@ -2336,7 +2437,8 @@
               1988.37,
               1839.66
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-87b936122ff24edb9533affe807de503"
         },
         {
           "corners": [
@@ -2356,7 +2458,8 @@
               1980.49,
               2469.95
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-9c1527596adc4beca942e58e2e4dcbbb"
         },
         {
           "corners": [
@@ -2376,7 +2479,8 @@
               2012.0,
               3328.72
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-b455598e832445faa0def2127f466bf7"
         },
         {
           "corners": [
@@ -2396,7 +2500,8 @@
               2130.18,
               4148.09
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-f869e4950f794403a7283ea52ddb70b6"
         },
         {
           "corners": [
@@ -2416,7 +2521,8 @@
               2169.58,
               4991.11
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-cea9ae5e00974efe81ea840f1fd7009c"
         },
         {
           "corners": [
@@ -2436,7 +2542,8 @@
               972.02,
               2635.4
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-b4f58c7a30be41b3987365cd55012d67"
         },
         {
           "corners": [
@@ -2456,7 +2563,8 @@
               916.87,
               3257.81
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-23b6d950c46d4218ab49548e309a3a01"
         },
         {
           "corners": [
@@ -2476,7 +2584,8 @@
               845.97,
               4014.16
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-acc35889c7224cc8942717126450a668"
         },
         {
           "corners": [
@@ -2496,7 +2605,8 @@
               822.33,
               4809.9
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-bc1d37b40e0a4e9fb2286b6f54860f92"
         }
       ]
     },
@@ -2527,7 +2637,8 @@
               968.1,
               2425.63
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-ab848a3277694c26b692af020cc22363"
         },
         {
           "corners": [
@@ -2547,7 +2658,8 @@
               2002.18,
               2041.55
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-2705969b812348d9bea89f6ebdfd00e4"
         },
         {
           "corners": [
@@ -2567,7 +2679,8 @@
               3142.61,
               2342.9
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-e2fffa0e726b4e198af0f14216de0d48"
         },
         {
           "corners": [
@@ -2587,7 +2700,8 @@
               3869.41,
               2337.0
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-e619d18a491f4b3585aac6205dfa4eab"
         },
         {
           "corners": [
@@ -2607,7 +2721,8 @@
               4808.94,
               2632.44
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-238bb0b53d3646f1ac351f261de36800"
         },
         {
           "corners": [
@@ -2627,7 +2742,8 @@
               3987.59,
               3264.7
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-7606851987194ec2b76dc2f13f092acd"
         },
         {
           "corners": [
@@ -2647,7 +2763,8 @@
               3308.06,
               3447.88
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-32699d38fcf543059e8ae327be94eeac"
         },
         {
           "corners": [
@@ -2667,7 +2784,8 @@
               2545.8,
               3518.79
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-9a06527c6a2a4b9fbfa9ee5830d9494b"
         },
         {
           "corners": [
@@ -2687,7 +2805,8 @@
               1304.92,
               3288.34
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-86ffd3baee22406398de3aabf12af9be"
         }
       ]
     },
@@ -2718,7 +2837,8 @@
               2847.16,
               895.21
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-585e75cfad824d7bb6feadadf585e4aa"
         },
         {
           "corners": [
@@ -2738,7 +2858,8 @@
               3508.97,
               1326.56
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-3c3a9f2fbef944f2ad820bb6cd56816d"
         },
         {
           "corners": [
@@ -2758,7 +2879,8 @@
               4625.76,
               2697.44
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-403a7515b48c4b04a04fc82786be3213"
         },
         {
           "corners": [
@@ -2778,7 +2900,8 @@
               4218.04,
               3282.43
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-abc8c7be404948f09fb1e33823629134"
         },
         {
           "corners": [
@@ -2798,7 +2921,8 @@
               2386.26,
               3660.6
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-aa85f625338b49a4a1566f5cfbfde423"
         },
         {
           "corners": [
@@ -2818,7 +2942,8 @@
               2746.71,
               2230.63
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-74e3c22676f048959fe938ea8c409d69"
         },
         {
           "corners": [
@@ -2838,7 +2963,8 @@
               1754.0,
               2703.35
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-ac43e5ce5d3043118205289d11217384"
         },
         {
           "corners": [
@@ -2858,7 +2984,8 @@
               2173.54,
               1557.01
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-405994e764c647f880830b5da54a6a0d"
         },
         {
           "corners": [
@@ -2878,7 +3005,8 @@
               1169.01,
               1870.19
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-a681ee34e72f4bb29597e6f7a398cbd0"
         }
       ]
     },
@@ -2909,7 +3037,8 @@
               2008.08,
               1019.3
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-c5de969cfedc4ddf8cc9e9c94651d1f3"
         },
         {
           "corners": [
@@ -2929,7 +3058,8 @@
               1316.73,
               1769.74
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-4fe5ac1b63a0454288e806b0820f563a"
         },
         {
           "corners": [
@@ -2949,7 +3079,8 @@
               2705.34,
               1409.29
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-e6eef022628149fbb13089b7dd955668"
         },
         {
           "corners": [
@@ -2969,7 +3100,8 @@
               3963.96,
               2797.9
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-368924a1e64645e4931efd5a90be1f2a"
         },
         {
           "corners": [
@@ -2989,7 +3121,8 @@
               3573.96,
               3459.7
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-bb12d79c04c642f685e47a2f2b543a2e"
         },
         {
           "corners": [
@@ -3009,7 +3142,8 @@
               1954.9,
               2431.54
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-b6d7f8f0bf7b4289b7d8c59502ece907"
         },
         {
           "corners": [
@@ -3029,7 +3163,8 @@
               1689.0,
               3956.05
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-07e66c5eef064bc894863af64befa243"
         }
       ]
     },
@@ -3060,7 +3195,8 @@
               113.31,
               1304.14
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-47379399fb3f49cd8267205128cb0962"
         },
         {
           "corners": [
@@ -3080,7 +3216,8 @@
               1815.1,
               1743.49
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-5b8503be7c284471bf60636530378ae9"
         },
         {
           "corners": [
@@ -3100,7 +3237,8 @@
               1737.24,
               3550.94
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-cba5bf2d3fe643ae8e24c0c8f02818a1"
         },
         {
           "corners": [
@@ -3120,7 +3258,8 @@
               235.66,
               3289.56
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-29de9a34263749fc958fa80c8ed17b93"
         }
       ]
     },
@@ -3151,7 +3290,8 @@
               349.61,
               1705.72
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-d30737da8fcb41c1b413ab6b400dc32f"
         },
         {
           "corners": [
@@ -3171,7 +3311,8 @@
               1523.53,
               1493.0
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-b0ad3e81adfc44b19db726d489ee9d40"
         },
         {
           "corners": [
@@ -3191,7 +3332,8 @@
               2988.95,
               1382.7
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-b36eecd3b370468bae56b1bdea211a5a"
         },
         {
           "corners": [
@@ -3211,7 +3353,8 @@
               2902.29,
               2178.44
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-aa0bac06ce434a54aa33887df06a8df5"
         },
         {
           "corners": [
@@ -3231,7 +3374,8 @@
               3020.47,
               3336.6
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-c004f0af61f740e8999e9ec4e4d6df5b"
         },
         {
           "corners": [
@@ -3251,7 +3395,8 @@
               3067.74,
               4471.12
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-a6f0b6f071fd4ef0b358c89ac4cb9a03"
         },
         {
           "corners": [
@@ -3271,7 +3416,8 @@
               1610.19,
               4652.33
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-d6461a15d933439ca95ca8081477cc1b"
         },
         {
           "corners": [
@@ -3291,7 +3437,8 @@
               255.07,
               4628.69
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-91942cf7cd19417681c4715f9fc9fad9"
         },
         {
           "corners": [
@@ -3311,7 +3458,8 @@
               325.98,
               3281.45
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-fa7d3f61574841cbbbe4539850b69eeb"
         },
         {
           "corners": [
@@ -3331,7 +3479,8 @@
               1673.22,
               3494.17
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-e117657c448949c69d6e48817b4be5c6"
         },
         {
           "corners": [
@@ -3351,7 +3500,8 @@
               1578.68,
               2501.46
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-5b5f6b5893a8401a99a585803930b9d0"
         },
         {
           "corners": [
@@ -3371,7 +3521,8 @@
               333.86,
               2469.95
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-abdafc38106145c5b547841558ab64cc"
         }
       ]
     },
@@ -3402,7 +3553,8 @@
               294.48,
               2520.17
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-8ebc193f342f4547a9ac9c7455454808"
         },
         {
           "corners": [
@@ -3422,7 +3574,8 @@
               1476.28,
               2236.54
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-58b9f221050c4ccba052b7aaf5637b6f"
         },
         {
           "corners": [
@@ -3442,7 +3595,8 @@
               2864.89,
               1249.75
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-94b7d9f8678647259a64974487a8ce8b"
         },
         {
           "corners": [
@@ -3462,7 +3616,8 @@
               4088.05,
               1633.83
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-30ac30110a8843b8a38a87a33a19fbca"
         },
         {
           "corners": [
@@ -3482,7 +3637,8 @@
               4572.58,
               3294.25
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-a54a002bf44a4faa941a85471c8b402e"
         },
         {
           "corners": [
@@ -3502,7 +3658,8 @@
               3544.42,
               2797.9
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-5a8202baaec7434f8f6390d255400ceb"
         },
         {
           "corners": [
@@ -3522,7 +3679,8 @@
               3585.78,
               3873.33
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-7fc7edef71644130a79256f81622d0a4"
         },
         {
           "corners": [
@@ -3542,7 +3700,8 @@
               2788.07,
               3997.42
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-5d768bd575f54858a9034ebb04ff2f0c"
         },
         {
           "corners": [
@@ -3562,7 +3721,8 @@
               1901.72,
               3979.69
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-82897bef55514f0e8ae23ce9d80f6e51"
         },
         {
           "corners": [
@@ -3582,7 +3742,8 @@
               548.57,
               3536.52
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-5d774389eef445e49e5a72d0def0bc30"
         },
         {
           "corners": [
@@ -3602,7 +3763,8 @@
               2740.8,
               2715.17
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-f29e12c10fe14ea791ce2e74646e79ac"
         }
       ]
     },
@@ -3633,7 +3795,8 @@
               185.61,
               3245.06
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-967f312489f94c76ba0edabde500ee9b"
         }
       ]
     },
@@ -3664,7 +3827,8 @@
               313.52,
               3039.29
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-c8bde43271ae4f6898a1b7ec8469e17f"
         }
       ]
     },
@@ -3695,7 +3859,8 @@
               157.8,
               2978.12
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-f00e986961834f60b3e4c76e95fcf452"
         }
       ]
     },
@@ -3726,7 +3891,8 @@
               1854.02,
               1092.81
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-b1b11b0d1a9240f18b253c11b3a9953c"
         },
         {
           "corners": [
@@ -3746,7 +3912,8 @@
               1981.94,
               2344.12
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-64a8b48d952649d89abaf6d2ea010584"
         },
         {
           "corners": [
@@ -3766,7 +3933,8 @@
               1069.87,
               2399.74
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-6077fac5cbd845548d91f1fde838f8b0"
         },
         {
           "corners": [
@@ -3786,7 +3954,8 @@
               675.01,
               1198.48
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-548cacdae32e484997454fd1d992e4c4"
         },
         {
           "corners": [
@@ -3806,7 +3975,8 @@
               380.26,
               2572.14
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-c9ccb114f4d448468c246f5bd9e31123"
         },
         {
           "corners": [
@@ -3826,7 +3996,8 @@
               686.14,
               3300.68
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-7da3540a6a294008ae8009b655981621"
         },
         {
           "corners": [
@@ -3846,7 +4017,8 @@
               1787.29,
               3517.57
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-75a60bf4ce164ca58e5ba85f76bbb99b"
         }
       ]
     },
@@ -3877,7 +4049,8 @@
               591.59,
               1065.0
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-dd94da39d71844058671e31fab5a9992"
         },
         {
           "corners": [
@@ -3897,7 +4070,8 @@
               1531.46,
               753.57
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-f73995c3ced5459aa086d7e6ffdfea2a"
         },
         {
           "corners": [
@@ -3917,7 +4091,8 @@
               1720.55,
               1337.51
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-9f40b5beedcb4a09995ea007119aab75"
         },
         {
           "corners": [
@@ -3937,7 +4112,8 @@
               858.54,
               1910.33
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-c4877200982842179b69bea2f1cb6f78"
         },
         {
           "corners": [
@@ -3957,7 +4133,8 @@
               1909.64,
               2622.19
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-ec4b6d5cabe54f05b56cdbfd3a040667"
         },
         {
           "corners": [
@@ -3977,7 +4154,8 @@
               1826.22,
               3728.9
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-b1fc09f576fa4345a16ba52921c41de8"
         },
         {
           "corners": [
@@ -3997,7 +4175,8 @@
               680.57,
               2811.28
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-f8a406c8d24d4014b5115c7a3cad0d91"
         },
         {
           "corners": [
@@ -4017,7 +4196,8 @@
               474.8,
               3484.2
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-cd9c8bdbb26f45deb9c268283f1a723e"
         }
       ]
     },
@@ -4048,7 +4228,8 @@
               324.65,
               1871.4
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-1bd20d7996b3499198eecac68152f624"
         },
         {
           "corners": [
@@ -4068,7 +4249,8 @@
               1881.83,
               1854.72
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-4187a2be01d644e8aa350a8a586e5f32"
         },
         {
           "corners": [
@@ -4088,7 +4270,8 @@
               1776.17,
               3562.06
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-8a1d12a872b348b1972afdf412a0f31c"
         },
         {
           "corners": [
@@ -4108,7 +4291,8 @@
               508.17,
               3712.22
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-7a69e052d02b43d6aa9c6818964ac027"
         }
       ]
     },
@@ -4139,7 +4323,8 @@
               255.07,
               1579.66
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-595c4b9d50e84e11ac3bfa8f64c767a9"
         },
         {
           "corners": [
@@ -4159,7 +4344,8 @@
               2051.4,
               1540.27
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-1c394050d3d94cc1adcd7563f2863a70"
         },
         {
           "corners": [
@@ -4179,7 +4365,8 @@
               255.07,
               2974.18
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-b7ea8d7053834953ac228f8a2549fa55"
         },
         {
           "corners": [
@@ -4199,7 +4386,8 @@
               909.0,
               4691.72
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-5c82cccd4d98426ab1e0d075e2edea35"
         }
       ]
     },
@@ -4230,7 +4418,8 @@
               335.77,
               1671.19
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-ef2cc16b139e47009ad9fca679f7cec7"
         },
         {
           "corners": [
@@ -4250,7 +4439,8 @@
               1559.27,
               1782.42
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-22eef608d3714886ba0249664d71109f"
         },
         {
           "corners": [
@@ -4270,7 +4460,8 @@
               380.26,
               2383.05
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-3a9c67e43a824c54a6cf03ccc3cc0aa5"
         },
         {
           "corners": [
@@ -4290,7 +4481,8 @@
               1742.8,
               2839.08
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-8b0367a5075943a0989f011de9df21aa"
         },
         {
           "corners": [
@@ -4310,7 +4502,8 @@
               285.72,
               3233.94
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-62e98eb3fa02442f8e6f21259b849941"
         }
       ]
     },
@@ -4341,7 +4534,8 @@
               782.94,
               1713.6
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-b40994a7e31a446ab5b8d1195c97c114"
         },
         {
           "corners": [
@@ -4361,7 +4555,8 @@
               1688.98,
               1461.48
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-c05bb9bd5d3c40e4a1984b14b0ebd0a6"
         },
         {
           "corners": [
@@ -4381,7 +4576,8 @@
               2516.23,
               1272.4
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-d438c4f5c0f34df78dc20558ed0460eb"
         },
         {
           "corners": [
@@ -4401,7 +4597,8 @@
               2760.47,
               2596.01
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-f56fdf9f6fb341509d791d5653b809a9"
         },
         {
           "corners": [
@@ -4421,7 +4618,8 @@
               1933.22,
               2729.94
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-37266448b7d34c3cb823ee0372b7b84c"
         },
         {
           "corners": [
@@ -4441,7 +4639,8 @@
               861.72,
               3446.9
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-950ca3da6885400394f9a606e19fc9c0"
         },
         {
           "corners": [
@@ -4461,7 +4660,8 @@
               1996.25,
               4179.61
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-34508e7d10944d2eb440eb64c10a9cce"
         },
         {
           "corners": [
@@ -4481,7 +4681,8 @@
               2642.29,
               3919.61
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-5775762377ae4ca994cee742219c07a5"
         },
         {
           "corners": [
@@ -4501,7 +4702,8 @@
               2106.55,
               5566.25
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-7921aab8a6b0443088d07eca087278eb"
         }
       ]
     },
@@ -4532,7 +4734,8 @@
               420.52,
               1697.84
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-7cc35d01c478444685f3e4f0bf2020d7"
         },
         {
           "corners": [
@@ -4552,7 +4755,8 @@
               207.8,
               2856.0
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-9111291d12064b64a3e57cb7d67e4277"
         },
         {
           "corners": [
@@ -4572,7 +4776,8 @@
               420.52,
               3848.71
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-84104dd5bc9e45b4ae369b180e7cf55b"
         },
         {
           "corners": [
@@ -4592,7 +4797,8 @@
               1428.98,
               2115.41
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-644e669e3d014f5cb6984c0e6c451121"
         },
         {
           "corners": [
@@ -4612,7 +4818,8 @@
               2807.74,
               1768.75
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-9209986d94dc44b995dbce4cdf1fdae7"
         },
         {
           "corners": [
@@ -4632,7 +4839,8 @@
               1791.4,
               3588.71
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-4fc82728fbec431c945f11825d3dfbd1"
         },
         {
           "corners": [
@@ -4652,7 +4860,8 @@
               2019.88,
               4526.27
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-7c8cbf4d0c3b415082667375d48dc401"
         }
       ]
     },
@@ -4683,7 +4892,8 @@
               124.44,
               1120.62
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-ca2def85842749239e58e80143a9bb58"
         },
         {
           "corners": [
@@ -4703,7 +4913,8 @@
               1642.69,
               1521.04
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-672326ff10904d94b940af530d3de46b"
         },
         {
           "corners": [
@@ -4723,7 +4934,8 @@
               1676.06,
               2388.61
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-d432f9fef8ed4c52bc13b1eb80956dd5"
         },
         {
           "corners": [
@@ -4743,7 +4955,8 @@
               1603.76,
               3367.42
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-cf39fa4ac568475bae9874c9df3cd683"
         },
         {
           "corners": [
@@ -4763,7 +4976,8 @@
               280.15,
               3467.52
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-e12e7f3549cd4e0fb189418f4a90b313"
         },
         {
           "corners": [
@@ -4783,7 +4997,8 @@
               285.72,
               2599.94
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-8e4d611ad6854109ac1c452c48bdd872"
         }
       ]
     },
@@ -4814,7 +5029,8 @@
               57.7,
               1454.3
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-c73f118eea6049949f7f53ed44731b7f"
         },
         {
           "corners": [
@@ -4834,7 +5050,8 @@
               1575.96,
               1265.21
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-2e00bec22924458badc12c419d3e5762"
         },
         {
           "corners": [
@@ -4854,7 +5071,8 @@
               1753.92,
               2388.61
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-ee7167848f124dcdaa7d555a1b4283f6"
         },
         {
           "corners": [
@@ -4874,7 +5092,8 @@
               1681.62,
               3300.68
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-1ea269cdae7b48478faa4a665dcbf45f"
         },
         {
           "corners": [
@@ -4894,7 +5113,8 @@
               102.19,
               3195.01
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-73933abd4f5f40cf863bf0c9ba838f38"
         },
         {
           "corners": [
@@ -4914,7 +5134,8 @@
               168.93,
               2321.88
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-dc4c363137524686b0d51731b0df644b"
         }
       ]
     },
@@ -4945,7 +5166,8 @@
               135.56,
               1493.23
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-8797edbfba434984b3e21176d266980f"
         },
         {
           "corners": [
@@ -4965,7 +5187,8 @@
               1080.99,
               1671.19
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-0c86c9d6a05f4c3393719609413035bb"
         },
         {
           "corners": [
@@ -4985,7 +5208,8 @@
               2237.76,
               1838.04
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-0c368d5a6cea4aa08773ff930d505c2e"
         },
         {
           "corners": [
@@ -5005,7 +5229,8 @@
               2087.6,
               3445.27
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-2c3da60dba8f435dbdae9a355a616fd3"
         },
         {
           "corners": [
@@ -5025,7 +5250,8 @@
               1119.92,
               3523.13
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-fec978d6d4fc41689fb6f916ed519ae2"
         },
         {
           "corners": [
@@ -5045,7 +5271,8 @@
               157.8,
               3389.66
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-bfa9ade6c7a8427895138e376360da29"
         }
       ]
     },
@@ -5076,7 +5303,8 @@
               822.33,
               1792.39
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-4093fbc510c74af9815fd307f3cc81d2"
         },
         {
           "corners": [
@@ -5096,7 +5324,8 @@
               2736.84,
               1768.75
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-52ccd487d88f48a7b59e485ccdcc43a3"
         },
         {
           "corners": [
@@ -5116,7 +5345,8 @@
               1625.95,
               3139.63
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-4aac3e2b9c9e4c7580f6ee1e334bbbac"
         },
         {
           "corners": [
@@ -5136,7 +5366,8 @@
               1712.62,
               5337.77
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-193c2dcab7ca4555bc5360cd111e73f7"
         },
         {
           "corners": [
@@ -5156,7 +5387,8 @@
               3091.37,
               5282.62
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-f5325a55f22f4dd886094ef9e9c893f4"
         },
         {
           "corners": [
@@ -5176,7 +5408,8 @@
               381.13,
               5408.67
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-c11e4dcc974a4083b4a7124d51ffc728"
         }
       ]
     },
@@ -5207,7 +5440,8 @@
               196.73,
               2727.86
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-a1c6b8f0d8b8470fa372dcfbc62775a7"
         }
       ]
     },
@@ -5238,7 +5472,8 @@
               218.98,
               2399.74
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-8ae0d6599e374ef993527e6c447ad1b8"
         }
       ]
     },
@@ -5269,7 +5504,8 @@
               499.84,
               2608.98
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-c24f350a83994cc5a2342ecbc4a84eef"
         },
         {
           "corners": [
@@ -5289,7 +5525,8 @@
               2330.93,
               2579.78
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-ce63d0b8a7e9434ea1356f83099f65e9"
         }
       ]
     },
@@ -5320,7 +5557,8 @@
               373.25,
               1240.88
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-7afe308913804358b5dc607890a76020"
         },
         {
           "corners": [
@@ -5340,7 +5578,8 @@
               2713.2,
               2485.7
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-ade1ea70053e4075b679c4fa269b810d"
         },
         {
           "corners": [
@@ -5360,7 +5599,8 @@
               507.19,
               2525.1
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-d7ba049109fe4626a7911e6c3c72bf48"
         },
         {
           "corners": [
@@ -5380,7 +5620,8 @@
               420.52,
               3919.61
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-9131153aa0874e46b72505b7f1eab8e3"
         },
         {
           "corners": [
@@ -5400,7 +5641,8 @@
               2405.93,
               4723.23
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-a652457336524e71bfa4c4fd92b503ab"
         }
       ]
     },
@@ -5431,7 +5673,8 @@
               436.28,
               1406.33
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-5dcc1b56dd50444eab95f67cf9f2c6ad"
         },
         {
           "corners": [
@@ -5451,7 +5694,8 @@
               2169.58,
               1516.63
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-f82a327080024b33ab3e31011280aa18"
         },
         {
           "corners": [
@@ -5471,7 +5715,8 @@
               1665.34,
               2477.83
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-dc9b0da2b79a488d991b0d3a78b4b2e4"
         },
         {
           "corners": [
@@ -5491,7 +5736,8 @@
               160.53,
               2375.4
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-811d4abac60e4fe69fe674a35253b7cd"
         },
         {
           "corners": [
@@ -5511,7 +5757,8 @@
               751.42,
               3509.93
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-15687e928d2f47ce960541d7c8d8b698"
         },
         {
           "corners": [
@@ -5531,7 +5778,8 @@
               1074.45,
               4778.38
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-c356149497f04b44974af14850fccbef"
         },
         {
           "corners": [
@@ -5551,7 +5799,8 @@
               2484.72,
               3565.08
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-6c63d7b0fce340fd8845f67caaffcd89"
         }
       ]
     },
@@ -5582,7 +5831,8 @@
               480.36,
               2855.77
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-edc7525747ae4a969a8c4c8102a71b3c"
         }
       ]
     },
@@ -5613,7 +5863,8 @@
               196.73,
               2811.28
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-6ea174167233459d84aae6ecff4faa02"
         }
       ]
     },
@@ -5644,7 +5895,8 @@
               235.66,
               2722.3
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-35a972a8bf574b0d84a9c51de2864ef3"
         }
       ]
     },
@@ -5675,7 +5927,8 @@
               591.59,
               3161.64
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-ab530371a8ef4361b6f0e7566268228a"
         }
       ]
     },
@@ -5706,7 +5959,8 @@
               591.59,
               1309.7
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-54f279394d6d436eb8691743e653f410"
         },
         {
           "corners": [
@@ -5726,7 +5980,8 @@
               508.17,
               2533.21
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-34eb0224a7ba4bd5b6cfbddb046cdcac"
         },
         {
           "corners": [
@@ -5746,10 +6001,11 @@
               430.31,
               3823.45
             ]
-          ]
+          ],
+          "ground_truth_card_id": "card-7f0ab63e5d9a44bf9c830219fccbcb53"
         }
       ]
     }
   },
-  "updated_at": "2026-08-17T06:59:12.969933+00:00"
+  "updated_at": "2026-08-18T04:42:21.822066+00:00"
 }
