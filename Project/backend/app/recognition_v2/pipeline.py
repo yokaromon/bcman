@@ -23,6 +23,7 @@ from ..search_text import refresh_search_text
 from ..settings import settings
 from . import detector
 from .alignment import align_ocr_lines
+from .card_detection import detect_cards_with_fallback
 from .local_contact import contact_from_ocr_lines
 from .model_runtime import PaddleModels
 from .orientation import OrientationEngine
@@ -131,15 +132,7 @@ def _auto_orient_v2(card: BusinessCard, db: Session) -> None:
 def detect_cards_v2(photo: Photo, db: Session) -> None:
     source = Path(photo.storage_path)
     image = detector.read_image(source)
-    detections = detector.detect_cards(image)
-    if not detections:
-        # V1のフォールバックと同じく、輪郭が拾えない写真は全体を確度の低い1枚として扱う
-        height, width = image.shape[:2]
-        full_frame = detector.Detection(
-            corners=detector.ordered_corners([[0, 0], [width - 1, 0], [width - 1, height - 1], [0, height - 1]]),
-            confidence=0.2, strategy="full_frame_fallback", score=0.0, contrast=0.0,
-        )
-        detections = [full_frame]
+    detections = detect_cards_with_fallback(image)
     for detection in detections:
         card = _write_card_v2(photo, db, image, detection)
         _auto_orient_v2(card, db)

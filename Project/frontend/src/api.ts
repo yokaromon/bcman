@@ -1,6 +1,7 @@
-// CT101 が /bcman/ プレフィックスを剥がして CT113 へ渡すため、
-// ブラウザから見た API のパスは常に /bcman/api で始まる。
-const API_BASE = '/bcman/api';
+// originは現在開いているホストを使い、Viteのbaseだけを連結する。
+// 公開ホストや配下パスを移すときも、本番URLをソースへ埋め込まない。
+export const APP_BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
+const API_BASE = `${APP_BASE}/api`;
 
 export type Role = 'admin' | 'member';
 
@@ -110,6 +111,25 @@ export type CardSummary = {
   confidence: number;
   image_revision: string;
   bounding_box: { x: number; y: number; width: number; height: number };
+};
+
+export type CardDetection = {
+  index: number;
+  corners: Array<[number, number]>;
+  confidence: number;
+  strategy: string;
+  score: number;
+  contrast: number;
+};
+
+export type CardDetectionResult = {
+  detector_version: string;
+  authoritative: true;
+  persisted: false;
+  source_size: { width: number; height: number };
+  card_count: number;
+  elapsed_ms: number;
+  cards: CardDetection[];
 };
 
 export const CONTACT_FIELDS = [
@@ -294,6 +314,15 @@ export function fetchMembers(): Promise<OrgMember[]> {
 
 export function fetchPhotos(): Promise<PhotoSummary[]> {
   return request<PhotoSummary[]>('/photos');
+}
+
+/** 画像を保存せず、V2パイプラインと同じ検出器から元画像座標の四隅だけを取得する。 */
+export function detectCardRectangles(file: File): Promise<CardDetectionResult> {
+  return request<CardDetectionResult>('/card-detections', {
+    method: 'POST',
+    headers: { 'Content-Type': file.type },
+    body: file,
+  });
 }
 
 export async function uploadPhoto(groupId: string, file: File): Promise<string> {

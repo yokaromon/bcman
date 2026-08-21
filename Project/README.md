@@ -9,6 +9,24 @@ Dockerを使わない名刺管理PoCです。`/bcman/` 配下で公開するReac
 
 フロントエンドは `http://localhost:5173/bcman/`、APIは `http://localhost:8000/bcman/api/` です。`backend/.env.example` を `.env` にコピーしてOCR APIを設定してください。
 
+公開ホスト名はフロントエンドへ埋め込まず、常に現在開いているoriginを使います。`/bcman/`
+以外の配下へ移す場合は、ビルド時に `VITE_APP_BASE_PATH=/new-path/` を設定し、バックエンドの
+`ROOT_PATH`、`PUBLIC_BASE_URL`、リバースプロキシのlocationも同じパスへ合わせます。
+
+### 保存しない高解像度矩形検出
+
+ログイン済みCookieを付けて `POST /bcman/api/card-detections` へJPEG/PNGの生バイトを送ると、
+V2パイプラインと同じ検出器が元画像座標の四隅を返します。画像、切り抜き、Photo/Card行は
+作成しません。上限は圧縮後`MAX_UPLOAD_BYTES`、展開後`MAX_DETECTION_PIXELS`です。
+
+```http
+POST /bcman/api/card-detections
+Content-Type: image/jpeg
+Cookie: bcman_session=...
+
+<JPEG bytes>
+```
+
 ## ログイン
 
 ログインには**会社コード・ID・パスワード**の3つが必要です。会社コードは会社ごとの短い文字列で、各社が `admin` のようなIDを使えるようにするためのものです（詳細は `docs/identity/CONTEXT.md` の Company Code）。

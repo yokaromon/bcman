@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { fetchMe, logout, type Me } from './api';
+import { APP_BASE, fetchMe, logout, type Me } from './api';
 import { CaptureFlow } from './CaptureFlow';
 import { DirectoryScreen } from './components/directory/DirectoryScreen';
 import { InstallAppButton } from './components/InstallAppButton';
@@ -10,7 +10,7 @@ import { SettingsScreen } from './components/SettingsScreen';
 
 type Tab = 'capture' | 'ledger' | 'directory' | 'settings';
 
-const INVITE_PREFIX = '/bcman/invite/';
+const INVITE_PREFIX = `${APP_BASE}/invite/`;
 
 /** 招待リンクで開かれたかを判定する。API のパスへ埋める前に形を確かめる。 */
 function readInviteToken(): string | null {

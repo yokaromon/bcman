@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { completeInvitation, fetchInvitation, type InvitationDetail } from '../api';
+import { APP_BASE, completeInvitation, fetchInvitation, type InvitationDetail } from '../api';
 
 const MINIMUM_PASSWORD_LENGTH = 12;
 
@@ -26,7 +26,7 @@ export function InviteScreen({ token, onCompleted }: { token: string; onComplete
   // 24時間有効な保持型資格情報なので、アドレスバーとこの履歴項目から消す。
   // pushState だと戻るボタン1回で復活してしまう。
   useEffect(() => {
-    window.history.replaceState(null, '', '/bcman/invite');
+    window.history.replaceState(null, '', `${APP_BASE}/invite`);
   }, []);
 
   useEffect(() => {

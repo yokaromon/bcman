@@ -2,6 +2,7 @@ import re
 import shutil
 from pathlib import Path
 from fastapi import BackgroundTasks, Depends, FastAPI, File, HTTPException, Request, Response, UploadFile
+from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from sqlalchemy import func
@@ -15,6 +16,7 @@ from .invitations import complete_invitation, describe_invitation, issue_invitat
 from .migrations import apply_sqlite_migrations
 from .models import AuditLog, BusinessCard, Contact, Group, OCRResult, Organization, Photo, TrustedDevice, User, UserGroup
 from .provider import router as provider_router
+from .recognition_v2.card_detection import DetectionImageTooLarge, InvalidDetectionImage, analyze_card_rectangles
 from .schemas import BatchConfirmInput, CardRegistrationInput, CompleteReviewInput, ContactInput, GroupInput, InvitationCompleteInput, LoginInput, ManualCardInput, OrientationInput, OrganizationInput, ReplacementApplyInput, ReprocessInput, TotpInput, UserInput, normalize_company_code
 from .search_text import refresh_search_text
 from .services import add_manual_card, apply_orientation, apply_replacement, card_image_revision, card_thumbnail, delete_card, delete_photo, discard_replacement, image_size, pending_replacement_path, photo_thumbnail, prepare_replacement, process_card, process_photo, run_ocr, structure, user_group_ids, visible_photo_query
@@ -240,6 +242,45 @@ def revoke_device(org_id: str, device_id: str, db: Session=Depends(get_db), admi
     device.revoked_at = auth.now(); db.commit(); return {"revoked":True}
 
 # --- 名刺 ---
+
+DETECTION_CONTENT_TYPES = {"image/jpeg", "image/png"}
+
+
+async def read_detection_payload(request: Request) -> bytes:
+    """高解像度画像を一時ファイルへ書かず、上限付きでメモリへ読む。"""
+    content_type = request.headers.get("content-type", "").split(";", 1)[0].strip().lower()
+    if content_type not in DETECTION_CONTENT_TYPES:
+        raise HTTPException(415, "JPEG または PNG のみ対応")
+    try:
+        declared_size = int(request.headers.get("content-length", "0"))
+    except ValueError as exc:
+        raise HTTPException(400, "Content-Length が不正です") from exc
+    if declared_size > settings.max_upload_bytes:
+        raise HTTPException(413, "画像がアップロード上限を超えています")
+
+    payload = bytearray()
+    async for chunk in request.stream():
+        payload.extend(chunk)
+        if len(payload) > settings.max_upload_bytes:
+            raise HTTPException(413, "画像がアップロード上限を超えています")
+    if not payload:
+        raise HTTPException(400, "画像が空です")
+    return bytes(payload)
+
+
+@app.post("/api/card-detections")
+async def detect_card_rectangles(request: Request, user: User=Depends(current_user)):
+    """高解像度画像から矩形だけを返す。画像・切り抜き・DB行は一切保存しない。"""
+    _ = user  # 認証済み利用者だけに、CPU負荷の高い検出処理を許可する
+    payload = await read_detection_payload(request)
+    try:
+        return await run_in_threadpool(
+            analyze_card_rectangles, payload, settings.max_detection_pixels
+        )
+    except InvalidDetectionImage as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except DetectionImageTooLarge as exc:
+        raise HTTPException(413, str(exc)) from exc
 
 def resolve_pipeline_version(user: User) -> str:
     """写真ごとの選択制ではなく、`RECOGNITION_PIPELINE_V2_ENABLED` だけがV1/V2を切り替える

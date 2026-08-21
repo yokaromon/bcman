@@ -9,6 +9,9 @@ class Settings(BaseSettings):
     ai_api_key: str = ""
     ai_model: str = ""
     max_upload_bytes: int = 20 * 1024 * 1024
+    # 非保存の矩形検出APIで、圧縮率の高い巨大画像によるメモリ枯渇を防ぐ。
+    # 一般的なスマホの12MP/48MP写真をそのまま扱える上限。
+    max_detection_pixels: int = 48_000_000
     # Recognition Pipeline V2 のマスタースイッチ（docs/adr/0019）。既定OFF。
     # ONにしても適用されるのは管理者が明示的にopt-inした新規写真だけで、既存カードは再処理しない。
     recognition_pipeline_v2_enabled: bool = False
