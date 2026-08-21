@@ -317,7 +317,7 @@ export function fetchPhotos(): Promise<PhotoSummary[]> {
 }
 
 /** 画像を保存せず、V2パイプラインと同じ検出器から元画像座標の四隅だけを取得する。 */
-export function detectCardRectangles(file: File): Promise<CardDetectionResult> {
+export function detectCardRectangles(file: Blob): Promise<CardDetectionResult> {
   return request<CardDetectionResult>('/card-detections', {
     method: 'POST',
     headers: { 'Content-Type': file.type },

@@ -4,6 +4,7 @@ import { CaptureFlow } from './CaptureFlow';
 import { DirectoryScreen } from './components/directory/DirectoryScreen';
 import { InstallAppButton } from './components/InstallAppButton';
 import { InviteScreen } from './components/InviteScreen';
+import { MobileScanLab } from './components/MobileScanLab';
 import { LEDGER_TAB_LABEL, LedgerScreen } from './components/ledger/LedgerScreen';
 import { LoginScreen } from './components/LoginScreen';
 import { SettingsScreen } from './components/SettingsScreen';
@@ -11,6 +12,7 @@ import { SettingsScreen } from './components/SettingsScreen';
 type Tab = 'capture' | 'ledger' | 'directory' | 'settings';
 
 const INVITE_PREFIX = `${APP_BASE}/invite/`;
+const MOBILE_SCAN_LAB_PATH = `${APP_BASE}/mobile-scan-lab`;
 
 /** 招待リンクで開かれたかを判定する。API のパスへ埋める前に形を確かめる。 */
 function readInviteToken(): string | null {
@@ -31,6 +33,7 @@ export function App() {
   // タブを押した回数。key に使い、開いているタブを押し直したときも作り直させる。
   // 同じタブに setTab しても state が変わらず、途中の画面に留まってしまうため。
   const [openCount, setOpenCount] = useState(0);
+  const mobileScanLab = window.location.pathname.replace(/\/+$/, '') === MOBILE_SCAN_LAB_PATH;
 
   const loadMe = async () => {
     try {
@@ -108,15 +111,21 @@ export function App() {
       </header>
 
       <main className="app__main">
-        {tab === 'capture' && <CaptureFlow key={openCount} user={me} />}
-        {tab === 'ledger' && <LedgerScreen key={openCount} user={me} />}
-        {tab === 'directory' && <DirectoryScreen key={openCount} user={me} />}
-        {tab === 'settings' && (me.role === 'admin' || me.is_provider_operator) && (
-          <SettingsScreen key={openCount} user={me} />
+        {mobileScanLab ? (
+          <MobileScanLab onClose={() => window.location.assign(`${APP_BASE}/`)} />
+        ) : (
+          <>
+            {tab === 'capture' && <CaptureFlow key={openCount} user={me} />}
+            {tab === 'ledger' && <LedgerScreen key={openCount} user={me} />}
+            {tab === 'directory' && <DirectoryScreen key={openCount} user={me} />}
+            {tab === 'settings' && (me.role === 'admin' || me.is_provider_operator) && (
+              <SettingsScreen key={openCount} user={me} />
+            )}
+          </>
         )}
       </main>
 
-      <nav className="tabbar">
+      {!mobileScanLab && <nav className="tabbar">
         <button
           type="button"
           className={tab === 'capture' ? 'tabbar__item tabbar__item--active' : 'tabbar__item'}
@@ -151,7 +160,7 @@ export function App() {
             設定
           </button>
         )}
-      </nav>
+      </nav>}
     </div>
   );
 }

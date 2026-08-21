@@ -833,3 +833,105 @@ textarea.field__input {
   flex-wrap: wrap;
   gap: 8px;
 }
+
+/* --- 保存しない動画→高解像度矩形検出ラボ --- */
+
+.mobile-lab__heading,
+.mobile-lab__result-title,
+.mobile-lab__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.mobile-lab__badge {
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: var(--line);
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.mobile-lab__badge--ready {
+  background: #d9f6e8;
+  color: #087442;
+}
+
+.mobile-lab__status {
+  min-height: 48px;
+  margin: 0;
+  padding: 12px;
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--muted);
+}
+
+.mobile-lab__video-stage {
+  position: relative;
+  overflow: hidden;
+  min-height: 240px;
+  border-radius: 14px;
+  background: #10151c;
+}
+
+.mobile-lab__video-stage video {
+  display: block;
+  width: 100%;
+  min-height: 240px;
+  object-fit: contain;
+}
+
+.mobile-lab__guide {
+  position: absolute;
+  inset: 18% 7%;
+  border: 2px dashed rgba(255, 255, 255, 0.76);
+  border-radius: 10px;
+  pointer-events: none;
+}
+
+.mobile-lab__video-placeholder {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #bdc8d4;
+}
+
+.mobile-lab__actions > * {
+  flex: 1;
+}
+
+.mobile-lab__result {
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.mobile-lab__result-title h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.mobile-lab__result-canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin: 12px 0;
+  border-radius: 10px;
+  background: #10151c;
+}
+
+.mobile-lab__result-canvas[hidden] {
+  display: none;
+}
+
+.mobile-lab__detections {
+  margin: 10px 0 0;
+  padding-left: 1.3em;
+  color: var(--muted);
+  font-size: 0.82rem;
+}

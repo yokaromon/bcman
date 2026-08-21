@@ -1,5 +1,5 @@
 import { useRef, type ChangeEvent } from 'react';
-import type { Group } from '../api';
+import { APP_BASE, type Group } from '../api';
 
 type Props = {
   canUpload: boolean;
@@ -107,6 +107,14 @@ export function CaptureScreen({
         onClick={() => fileInput.current?.click()}
       >
         写真を選ぶ
+      </button>
+
+      <button
+        type="button"
+        className="button button--ghost"
+        onClick={() => window.location.assign(`${APP_BASE}/mobile-scan-lab/`)}
+      >
+        動画から矩形検出を試す
       </button>
 
       <p className="hint">JPEG / PNG・20MBまで</p>
