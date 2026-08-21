@@ -115,11 +115,14 @@ export type CardSummary = {
 
 export type CardDetection = {
   index: number;
+  candidate_index: number;
   corners: Array<[number, number]>;
   confidence: number;
   strategy: string;
   score: number;
   contrast: number;
+  semantic_confidence?: number;
+  semantic_reason?: string;
 };
 
 export type CardDetectionResult = {
@@ -127,8 +130,13 @@ export type CardDetectionResult = {
   authoritative: true;
   persisted: false;
   source_size: { width: number; height: number };
+  candidate_count: number;
   card_count: number;
   elapsed_ms: number;
+  semantic_status: 'not_requested' | 'completed' | 'no_geometric_candidates';
+  semantic_version: string | null;
+  semantic_model: string | null;
+  semantic_attempts: number;
   cards: CardDetection[];
 };
 
@@ -317,8 +325,8 @@ export function fetchPhotos(): Promise<PhotoSummary[]> {
 }
 
 /** 画像を保存せず、V2パイプラインと同じ検出器から元画像座標の四隅だけを取得する。 */
-export function detectCardRectangles(file: Blob): Promise<CardDetectionResult> {
-  return request<CardDetectionResult>('/card-detections', {
+export function detectCardRectangles(file: Blob, semantic = false): Promise<CardDetectionResult> {
+  return request<CardDetectionResult>(`/card-detections?semantic=${semantic ? 'true' : 'false'}`, {
     method: 'POST',
     headers: { 'Content-Type': file.type },
     body: file,

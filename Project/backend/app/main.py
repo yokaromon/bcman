@@ -17,6 +17,8 @@ from .migrations import apply_sqlite_migrations
 from .models import AuditLog, BusinessCard, Contact, Group, OCRResult, Organization, Photo, TrustedDevice, User, UserGroup
 from .provider import router as provider_router
 from .recognition_v2.card_detection import DetectionImageTooLarge, InvalidDetectionImage, analyze_card_rectangles
+from .recognition_v2.card_semantics import CardSemanticContractError, classify_card_candidates
+from .recognition_v2.ykr_client import ManagedRecognitionClient, ManagedRecognitionError, YkrSettings
 from .schemas import BatchConfirmInput, CardRegistrationInput, CompleteReviewInput, ContactInput, GroupInput, InvitationCompleteInput, LoginInput, ManualCardInput, OrientationInput, OrganizationInput, ReplacementApplyInput, ReprocessInput, TotpInput, UserInput, normalize_company_code
 from .search_text import refresh_search_text
 from .services import add_manual_card, apply_orientation, apply_replacement, card_image_revision, card_thumbnail, delete_card, delete_photo, discard_replacement, image_size, pending_replacement_path, photo_thumbnail, prepare_replacement, process_card, process_photo, run_ocr, structure, user_group_ids, visible_photo_query
@@ -268,19 +270,34 @@ async def read_detection_payload(request: Request) -> bytes:
     return bytes(payload)
 
 
+def managed_card_semantic_filter(image, detections):
+    client = ManagedRecognitionClient(YkrSettings(
+        base_url=settings.ai_base_url,
+        api_key=settings.ai_api_key,
+        ocr_model=settings.ai_model,
+        contact_model=settings.ai_model,
+    ))
+    return classify_card_candidates(image, detections, client)
+
+
 @app.post("/api/card-detections")
-async def detect_card_rectangles(request: Request, user: User=Depends(current_user)):
+async def detect_card_rectangles(request: Request, semantic: bool=False, user: User=Depends(current_user)):
     """高解像度画像から矩形だけを返す。画像・切り抜き・DB行は一切保存しない。"""
     _ = user  # 認証済み利用者だけに、CPU負荷の高い検出処理を許可する
     payload = await read_detection_payload(request)
     try:
         return await run_in_threadpool(
-            analyze_card_rectangles, payload, settings.max_detection_pixels
+            analyze_card_rectangles,
+            payload,
+            settings.max_detection_pixels,
+            managed_card_semantic_filter if semantic else None,
         )
     except InvalidDetectionImage as exc:
         raise HTTPException(400, str(exc)) from exc
     except DetectionImageTooLarge as exc:
         raise HTTPException(413, str(exc)) from exc
+    except (ManagedRecognitionError, CardSemanticContractError) as exc:
+        raise HTTPException(502, f"名刺候補の意味判定に失敗しました: {exc}") from exc
 
 def resolve_pipeline_version(user: User) -> str:
     """写真ごとの選択制ではなく、`RECOGNITION_PIPELINE_V2_ENABLED` だけがV1/V2を切り替える

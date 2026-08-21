@@ -203,6 +203,35 @@ class ManagedRecognitionClient:
         )
         return StageResult(document, attempts, self.settings.ocr_model, "ocr-v1")
 
+    def analyze_image_json(
+        self,
+        *,
+        image_data_url: str,
+        prompt: str,
+        validator: Callable[[dict], dict],
+        stage: str,
+        prompt_version: str,
+    ) -> StageResult:
+        """管理下Visionモデルへメモリ上の画像を送り、検証済みJSONだけを返す。"""
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {"type": "image_url", "image_url": {"url": image_data_url}},
+                ],
+            }
+        ]
+        document, attempts = self._request(
+            model=self.settings.ocr_model,
+            messages=messages,
+            validator=validator,
+            stage=stage,
+        )
+        return StageResult(
+            document, attempts, self.settings.ocr_model, prompt_version
+        )
+
     def structure_contact(
         self,
         ocr_document: dict,

@@ -12,6 +12,7 @@ from app.database import SessionLocal
 from app.main import app, current_user
 from app.models import BusinessCard, Photo, User
 from app.recognition_v2 import card_detection, detector
+from app.recognition_v2.card_semantics import SemanticSelection, SemanticVerdict
 from app.settings import settings
 
 
@@ -83,6 +84,7 @@ def test_detection_returns_rectangles_without_persisting(monkeypatch):
     assert document["card_count"] == 1
     assert document["cards"][0] == {
         "index": 1,
+        "candidate_index": 1,
         "corners": [[10.0, 20.0], [610.0, 20.0], [610.0, 460.0], [10.0, 460.0]],
         "confidence": 0.91,
         "strategy": "test-contour",
@@ -106,6 +108,82 @@ def test_detection_uses_the_pipeline_full_frame_fallback(monkeypatch):
         [319.0, 239.0],
         [0.0, 239.0],
     ]
+
+
+def test_semantic_detection_rejects_non_card_candidates(monkeypatch):
+    candidates = [
+        detector.Detection(
+            corners=np.float32([[10, 20], [300, 20], [300, 200], [10, 200]]),
+            confidence=0.81, strategy="candidate-one", score=0.81, contrast=0.5,
+        ),
+        detector.Detection(
+            corners=np.float32([[320, 30], [620, 30], [620, 210], [320, 210]]),
+            confidence=0.77, strategy="candidate-two", score=0.77, contrast=0.4,
+        ),
+    ]
+    monkeypatch.setattr(card_detection.detector, "detect_cards", lambda _image: candidates)
+    monkeypatch.setattr(card_detection, "_refine_semantic_detection", lambda _image, item: item)
+
+    def semantic_filter(_image, _candidates):
+        return SemanticSelection(
+            verdicts={
+                1: SemanticVerdict(1, "not_business_card", 0.96, "multiple_cards_or_background"),
+                2: SemanticVerdict(2, "business_card", 0.91, "one_complete_card"),
+            },
+            attempts=1,
+            model="vision-fixed",
+        )
+
+    result = card_detection.analyze_card_rectangles(
+        _jpeg(), 48_000_000, semantic_filter
+    )
+
+    assert result["candidate_count"] == 2
+    assert result["card_count"] == 1
+    assert result["semantic_status"] == "completed"
+    assert result["semantic_model"] == "vision-fixed"
+    assert result["cards"][0]["candidate_index"] == 2
+    assert result["cards"][0]["semantic_confidence"] == 0.91
+    assert result["cards"][0]["semantic_reason"] == "one_complete_card"
+
+
+def test_semantic_api_uses_managed_filter_without_persisting(monkeypatch):
+    from app import main
+
+    candidate = detector.Detection(
+        corners=np.float32([[10, 20], [610, 20], [610, 460], [10, 460]]),
+        confidence=0.9, strategy="semantic-test", score=0.9, contrast=0.8,
+    )
+    monkeypatch.setattr(card_detection.detector, "detect_cards", lambda _image: [candidate])
+    monkeypatch.setattr(card_detection, "_refine_semantic_detection", lambda _image, item: item)
+    monkeypatch.setattr(
+        main,
+        "managed_card_semantic_filter",
+        lambda _image, _candidates: SemanticSelection(
+            {1: SemanticVerdict(1, "business_card", 0.94, "one_complete_card")},
+            1,
+            "vision-fixed",
+        ),
+    )
+    app.dependency_overrides[current_user] = _authenticated_user
+    before_files = _stored_files(settings.storage_dir)
+    with SessionLocal() as db:
+        before_rows = (db.query(Photo).count(), db.query(BusinessCard).count())
+    try:
+        with TestClient(app) as client:
+            response = client.post(
+                "/api/card-detections?semantic=true",
+                content=_jpeg(),
+                headers={"Content-Type": "image/jpeg"},
+            )
+    finally:
+        app.dependency_overrides.pop(current_user, None)
+
+    assert response.status_code == 200
+    assert response.json()["semantic_status"] == "completed"
+    assert _stored_files(settings.storage_dir) == before_files
+    with SessionLocal() as db:
+        assert (db.query(Photo).count(), db.query(BusinessCard).count()) == before_rows
 
 
 def test_detection_rejects_wrong_media_type_before_running_detector(monkeypatch):

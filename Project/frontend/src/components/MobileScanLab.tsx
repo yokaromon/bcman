@@ -176,7 +176,7 @@ export function MobileScanLab({ onClose }: { onClose: () => void }) {
       if (!['image/jpeg', 'image/png'].includes(blob.type)) {
         throw new Error('JPEGまたはPNG画像を取得できませんでした');
       }
-      const document = await detectCardRectangles(blob);
+      const document = await detectCardRectangles(blob, true);
       const canvas = resultCanvasRef.current;
       if (!canvas) {
         throw new Error('結果表示領域を作成できません');
@@ -186,7 +186,11 @@ export function MobileScanLab({ onClose }: { onClose: () => void }) {
       setCaptureSource(source);
       const usedFallback = document.cards.some((card) => card.strategy === 'full_frame_fallback');
       setMessage(
-        usedFallback
+        document.card_count === 0
+          ? document.candidate_count > 0
+            ? `幾何候補${document.candidate_count}件は、名刺全体ではないと判定されました（${document.elapsed_ms.toFixed(0)}ms）。`
+            : `幾何候補を検出できませんでした（${document.elapsed_ms.toFixed(0)}ms）。`
+          : usedFallback
           ? `輪郭を検出できなかったため、画像全体を仮の1枚として表示しました（${document.elapsed_ms.toFixed(0)}ms）。`
           : `${document.card_count}枚を${document.elapsed_ms.toFixed(0)}msで検出しました。`,
       );
@@ -242,7 +246,7 @@ export function MobileScanLab({ onClose }: { onClose: () => void }) {
       <div className="hero">
         <div className="hero__icon" aria-hidden="true">🎥</div>
         <h2 className="hero__title">動画から矩形検出</h2>
-        <p className="hero__note">ボタンを押した瞬間の1枚だけをWebAPIへ送ります。画像や切り抜きは保存しません。</p>
+        <p className="hero__note">ボタンを押した瞬間の1枚だけをWebAPIへ送り、輪郭と名刺らしさの両方を判定します。画像や切り抜きは保存しません。</p>
       </div>
 
       {errorMessage && <p className="alert alert--error">{errorMessage}</p>}
@@ -306,7 +310,7 @@ export function MobileScanLab({ onClose }: { onClose: () => void }) {
       <section className="mobile-lab__result">
         <div className="mobile-lab__result-title">
           <h3>検出結果</h3>
-          <span className={result && !usedFallback ? 'mobile-lab__badge mobile-lab__badge--ready' : 'mobile-lab__badge'}>
+          <span className={result && result.card_count > 0 && !usedFallback ? 'mobile-lab__badge mobile-lab__badge--ready' : 'mobile-lab__badge'}>
             {result ? (usedFallback ? '仮矩形' : `${result.card_count}枚`) : '未実行'}
           </span>
         </div>
@@ -314,12 +318,14 @@ export function MobileScanLab({ onClose }: { onClose: () => void }) {
         {result && (
           <>
             <p className="hint">
-              {captureSource}・{result.source_size.width}×{result.source_size.height}px・{result.detector_version}
+              {captureSource}・{result.source_size.width}×{result.source_size.height}px・候補{result.candidate_count}件
+              {result.semantic_model ? `・${result.semantic_model}` : ''}
             </p>
             <ul className="mobile-lab__detections">
               {result.cards.map((card) => (
                 <li key={card.index}>
-                  #{card.index} {card.strategy}・confidence {card.confidence.toFixed(3)}
+                  #{card.index} {card.strategy}・geometry {card.confidence.toFixed(3)}
+                  {card.semantic_confidence !== undefined ? `・cardness ${card.semantic_confidence.toFixed(3)}` : ''}
                 </li>
               ))}
             </ul>
