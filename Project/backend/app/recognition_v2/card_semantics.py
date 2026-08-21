@@ -1,7 +1,7 @@
 """管理下Visionモデルによる、OpenCV候補の「名刺らしさ」選別。
 
-画像はメモリ上で候補番号を描画し、data URLとして管理下ykrへ送る。原画像、
-候補画像、応答のいずれも、この処理からファイルやDBへ保存しない。
+画像はメモリ上で候補ごとに台形補正した一覧シートへ変換し、data URLとして
+管理下ykrへ送る。原画像、候補画像、応答のいずれもファイルやDBへ保存しない。
 """
 
 from __future__ import annotations
@@ -17,8 +17,12 @@ from . import detector
 from .ykr_client import ManagedRecognitionClient
 
 
-SEMANTIC_FILTER_VERSION = "managed-cardness-v1"
-ANNOTATION_MAX_EDGE = 1600
+SEMANTIC_FILTER_VERSION = "managed-cardness-v2"
+SHEET_MAX_COLUMNS = 3
+SHEET_CELL_WIDTH = 500
+SHEET_CELL_HEIGHT = 310
+SHEET_LABEL_HEIGHT = 46
+SHEET_PADDING = 16
 REASONS = {
     "one_complete_card",
     "multiple_cards_or_background",
@@ -107,54 +111,69 @@ def _validate_document(document: dict, expected_ids: set[int]) -> dict:
     return {"schema_version": 1, "candidates": normalized}
 
 
-def _annotated_data_url(
+def _candidate_sheet_data_url(
     image: np.ndarray, detections: list[detector.Detection]
 ) -> str:
-    height, width = image.shape[:2]
-    scale = min(1.0, ANNOTATION_MAX_EDGE / float(max(height, width)))
-    annotated = (
-        cv2.resize(
-            image,
-            (max(1, round(width * scale)), max(1, round(height * scale))),
-            interpolation=cv2.INTER_AREA,
-        )
-        if scale < 1.0
-        else image.copy()
+    """重なった候補線を排除し、候補ごとの内容を独立して比較できる画像を作る。"""
+    if not detections:
+        raise ValueError("候補一覧シートには1件以上の候補が必要です")
+    columns = min(SHEET_MAX_COLUMNS, max(1, int(np.ceil(np.sqrt(len(detections))))))
+    rows = int(np.ceil(len(detections) / columns))
+    sheet = np.full(
+        (rows * SHEET_CELL_HEIGHT, columns * SHEET_CELL_WIDTH, 3),
+        30,
+        dtype=np.uint8,
     )
-    line_width = max(3, round(max(annotated.shape[:2]) / 420))
-    font_scale = max(0.8, max(annotated.shape[:2]) / 1100)
     for candidate_id, detection in enumerate(detections, 1):
-        points = np.int32(np.round(detector.ordered_corners(detection.corners) * scale))
-        cv2.polylines(annotated, [points], True, (20, 220, 40), line_width, cv2.LINE_AA)
-        anchor_x = int(np.clip(points[0][0], 0, annotated.shape[1] - 1))
-        anchor_y = int(np.clip(points[0][1], 28, annotated.shape[0] - 1))
-        label = str(candidate_id)
-        (text_width, text_height), _ = cv2.getTextSize(
-            label, cv2.FONT_HERSHEY_SIMPLEX, font_scale, line_width
-        )
+        row, column = divmod(candidate_id - 1, columns)
+        x = column * SHEET_CELL_WIDTH
+        y = row * SHEET_CELL_HEIGHT
         cv2.rectangle(
-            annotated,
-            (anchor_x, max(0, anchor_y - text_height - 12)),
-            (
-                min(annotated.shape[1] - 1, anchor_x + text_width + 12),
-                min(annotated.shape[0] - 1, anchor_y + 6),
-            ),
+            sheet,
+            (x + 2, y + 2),
+            (x + SHEET_CELL_WIDTH - 3, y + SHEET_LABEL_HEIGHT - 1),
             (210, 20, 105),
             -1,
         )
         cv2.putText(
-            annotated,
-            label,
-            (anchor_x + 5, anchor_y - 4),
+            sheet,
+            f"CANDIDATE {candidate_id}",
+            (x + 14, y + 33),
             cv2.FONT_HERSHEY_SIMPLEX,
-            font_scale,
+            0.82,
             (255, 255, 255),
-            line_width,
+            2,
             cv2.LINE_AA,
         )
-    ok, encoded = cv2.imencode(
-        ".jpg", annotated, [cv2.IMWRITE_JPEG_QUALITY, 88]
-    )
+        crop = detector.perspective_crop(image, detection.corners)
+        available_width = SHEET_CELL_WIDTH - 2 * SHEET_PADDING
+        available_height = (
+            SHEET_CELL_HEIGHT - SHEET_LABEL_HEIGHT - 2 * SHEET_PADDING
+        )
+        scale = min(
+            available_width / max(1, crop.shape[1]),
+            available_height / max(1, crop.shape[0]),
+        )
+        resized = cv2.resize(
+            crop,
+            (
+                max(1, round(crop.shape[1] * scale)),
+                max(1, round(crop.shape[0] * scale)),
+            ),
+            interpolation=cv2.INTER_AREA if scale < 1.0 else cv2.INTER_CUBIC,
+        )
+        crop_x = x + (SHEET_CELL_WIDTH - resized.shape[1]) // 2
+        content_top = y + SHEET_LABEL_HEIGHT
+        crop_y = content_top + (SHEET_CELL_HEIGHT - SHEET_LABEL_HEIGHT - resized.shape[0]) // 2
+        sheet[crop_y:crop_y + resized.shape[0], crop_x:crop_x + resized.shape[1]] = resized
+        cv2.rectangle(
+            sheet,
+            (crop_x, crop_y),
+            (crop_x + resized.shape[1] - 1, crop_y + resized.shape[0] - 1),
+            (225, 225, 225),
+            2,
+        )
+    ok, encoded = cv2.imencode(".jpg", sheet, [cv2.IMWRITE_JPEG_QUALITY, 90])
     if not ok:
         raise ValueError("候補ラベル画像を作成できません")
     return "data:image/jpeg;base64," + base64.b64encode(encoded).decode("ascii")
@@ -167,7 +186,7 @@ def classify_card_candidates(
 ) -> SemanticSelection:
     expected_ids = set(range(1, len(detections) + 1))
     stage = client.analyze_image_json(
-        image_data_url=_annotated_data_url(image, detections),
+        image_data_url=_candidate_sheet_data_url(image, detections),
         prompt=_prompt(),
         validator=lambda value: _validate_document(value, expected_ids),
         stage="名刺候補選別",

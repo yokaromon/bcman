@@ -1,13 +1,16 @@
 """管理下Visionへ渡す名刺候補ラベルと厳密なJSON契約。"""
 
+import base64
 import json
 
+import cv2
 import numpy as np
 import pytest
 
 from app.recognition_v2 import detector
 from app.recognition_v2.card_semantics import (
     CardSemanticContractError,
+    _candidate_sheet_data_url,
     _validate_document,
     classify_card_candidates,
 )
@@ -79,6 +82,23 @@ def test_candidate_classifier_sends_one_labeled_image_and_validates_every_id():
     content = calls[0]["messages"][0]["content"]
     assert content[1]["image_url"]["url"].startswith("data:image/jpeg;base64,")
     assert calls[0]["response_format"] == {"type": "json_object"}
+
+
+def test_candidate_sheet_rectifies_candidates_into_separate_cells():
+    image_url = _candidate_sheet_data_url(
+        np.full((240, 640, 3), 245, np.uint8),
+        _detections(),
+    )
+    encoded = image_url.split(",", 1)[1]
+    sheet = cv2.imdecode(
+        np.frombuffer(base64.b64decode(encoded), np.uint8),
+        cv2.IMREAD_COLOR,
+    )
+
+    assert sheet is not None
+    assert sheet.shape[:2] == (310, 1000)
+    assert np.mean(sheet[:, :500]) > 40
+    assert np.mean(sheet[:, 500:]) > 40
 
 
 def test_candidate_contract_rejects_missing_or_duplicate_ids():
