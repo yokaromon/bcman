@@ -140,6 +140,36 @@ export type CardDetectionResult = {
   cards: CardDetection[];
 };
 
+export type GuidedCardCapture = {
+  corners: Array<[number, number]>;
+  confidence: number;
+  semantic_confidence: number;
+  strategy: string;
+  quality: {
+    sharpness: number;
+    brightness: number;
+    glare_ratio: number;
+  };
+  fingerprint: string;
+  crop_size: { width: number; height: number };
+  crop_data_url: string;
+};
+
+export type GuidedCardCaptureResult = {
+  detector_version: string;
+  guided_version: string;
+  authoritative: true;
+  persisted: false;
+  source_size: { width: number; height: number };
+  candidate_count: number;
+  semantic_model: string;
+  semantic_attempts: number;
+  accepted: boolean;
+  reason: 'accepted' | 'not_business_card';
+  elapsed_ms: number;
+  card: GuidedCardCapture | null;
+};
+
 export const CONTACT_FIELDS = [
   'company_name',
   'company_name_kana',
@@ -327,6 +357,15 @@ export function fetchPhotos(): Promise<PhotoSummary[]> {
 /** 画像を保存せず、V2パイプラインと同じ検出器から元画像座標の四隅だけを取得する。 */
 export function detectCardRectangles(file: Blob, semantic = false): Promise<CardDetectionResult> {
   return request<CardDetectionResult>(`/card-detections?semantic=${semantic ? 'true' : 'false'}`, {
+    method: 'POST',
+    headers: { 'Content-Type': file.type },
+    body: file,
+  });
+}
+
+/** 中央ガイド部分から1枚を補正し、保存せず画像と品質情報を返す。 */
+export function captureGuidedCard(file: Blob): Promise<GuidedCardCaptureResult> {
+  return request<GuidedCardCaptureResult>('/guided-card-captures', {
     method: 'POST',
     headers: { 'Content-Type': file.type },
     body: file,

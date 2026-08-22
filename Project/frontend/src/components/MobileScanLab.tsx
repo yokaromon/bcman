@@ -1,18 +1,55 @@
-import { useCallback, useEffect, useRef, useState, type ChangeEvent } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  detectCardRectangles,
-  type CardDetectionResult,
+  captureGuidedCard,
+  type GuidedCardCapture,
 } from '../api';
 
-const RESULT_MAX_EDGE = 1600;
+const SAMPLE_WIDTH = 160;
+const SAMPLE_HEIGHT = 97;
+const ANALYZE_INTERVAL_MS = 250;
+const STABLE_FRAME_COUNT = 4;
+const STABLE_DIFF_MAX = 4.5;
+const RELEASE_DIFF_MIN = 10;
+const DETAIL_MIN = 4.5;
+const CAPTURE_MAX_EDGE = 2400;
+const DUPLICATE_DISTANCE_MAX = 5;
 
-type ImageCaptureLike = {
-  takePhoto: () => Promise<Blob>;
+type ScanPhase =
+  | 'stopped'
+  | 'searching'
+  | 'holding'
+  | 'verifying'
+  | 'release'
+  | 'finished';
+
+type FrameSample = {
+  pixels: Uint8Array;
+  detail: number;
+  brightness: number;
+  glareRatio: number;
 };
 
-type ImageCaptureConstructor = new (track: MediaStreamTrack) => ImageCaptureLike;
+type CapturedCard = GuidedCardCapture & {
+  id: string;
+};
 
-function canvasBlob(canvas: HTMLCanvasElement, quality = 0.94): Promise<Blob> {
+type SourceRect = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+const PHASE_LABELS: Record<ScanPhase, string> = {
+  stopped: '停止中',
+  searching: '名刺を探しています',
+  holding: '静止判定中',
+  verifying: 'サーバ確認中',
+  release: '次の名刺を待っています',
+  finished: '撮影終了',
+};
+
+function canvasBlob(canvas: HTMLCanvasElement, quality = 0.92): Promise<Blob> {
   return new Promise((resolve, reject) => {
     canvas.toBlob(
       (blob) => (blob ? resolve(blob) : reject(new Error('画像をJPEG化できません'))),
@@ -22,90 +59,167 @@ function canvasBlob(canvas: HTMLCanvasElement, quality = 0.94): Promise<Blob> {
   });
 }
 
-async function blobImage(blob: Blob): Promise<ImageBitmap | HTMLImageElement> {
-  if ('createImageBitmap' in window) {
-    try {
-      return await createImageBitmap(blob, { imageOrientation: 'from-image' });
-    } catch {
-      return await createImageBitmap(blob);
+function frameDifference(first: Uint8Array, second: Uint8Array): number {
+  if (first.length !== second.length) {
+    return Number.POSITIVE_INFINITY;
+  }
+  let total = 0;
+  for (let index = 0; index < first.length; index += 1) {
+    total += Math.abs(first[index] - second[index]);
+  }
+  return total / first.length;
+}
+
+function fingerprintDistance(first: string, second: string): number {
+  if (first.length !== second.length) {
+    return Number.POSITIVE_INFINITY;
+  }
+  let distance = 0;
+  for (let index = 0; index < first.length; index += 1) {
+    let value = Number.parseInt(first[index], 16) ^ Number.parseInt(second[index], 16);
+    while (value) {
+      distance += value & 1;
+      value >>= 1;
     }
   }
-  const url = URL.createObjectURL(blob);
-  const image = new Image();
-  image.src = url;
-  try {
-    await image.decode();
-    return image;
-  } finally {
-    URL.revokeObjectURL(url);
-  }
+  return distance;
 }
 
-function imageDimensions(image: ImageBitmap | HTMLImageElement): { width: number; height: number } {
-  if (image instanceof HTMLImageElement) {
-    return { width: image.naturalWidth, height: image.naturalHeight };
+function guideSourceRect(video: HTMLVideoElement, guide: HTMLDivElement): SourceRect {
+  if (!video.videoWidth || !video.videoHeight) {
+    throw new Error('カメラ映像の準備中です');
   }
-  return { width: image.width, height: image.height };
+  const videoBounds = video.getBoundingClientRect();
+  const guideBounds = guide.getBoundingClientRect();
+  const scale = Math.min(
+    videoBounds.width / video.videoWidth,
+    videoBounds.height / video.videoHeight,
+  );
+  const renderedWidth = video.videoWidth * scale;
+  const renderedHeight = video.videoHeight * scale;
+  const renderedLeft = videoBounds.left + (videoBounds.width - renderedWidth) / 2;
+  const renderedTop = videoBounds.top + (videoBounds.height - renderedHeight) / 2;
+  const left = Math.max(renderedLeft, guideBounds.left);
+  const top = Math.max(renderedTop, guideBounds.top);
+  const right = Math.min(renderedLeft + renderedWidth, guideBounds.right);
+  const bottom = Math.min(renderedTop + renderedHeight, guideBounds.bottom);
+  if (right <= left || bottom <= top) {
+    throw new Error('ガイド範囲をカメラ画像へ対応付けできません');
+  }
+  return {
+    x: (left - renderedLeft) / scale,
+    y: (top - renderedTop) / scale,
+    width: (right - left) / scale,
+    height: (bottom - top) / scale,
+  };
 }
 
-function closeBitmap(image: ImageBitmap | HTMLImageElement): void {
-  if ('close' in image && typeof image.close === 'function') {
-    image.close();
-  }
-}
-
-async function renderResult(
+function drawGuideFrame(
+  video: HTMLVideoElement,
+  guide: HTMLDivElement,
   canvas: HTMLCanvasElement,
-  blob: Blob,
-  result: CardDetectionResult,
-): Promise<void> {
-  const image = await blobImage(blob);
-  const source = imageDimensions(image);
-  const scale = Math.min(1, RESULT_MAX_EDGE / Math.max(source.width, source.height));
-  canvas.width = Math.max(1, Math.round(source.width * scale));
-  canvas.height = Math.max(1, Math.round(source.height * scale));
-  const context = canvas.getContext('2d');
+  maxEdge: number,
+): void {
+  const source = guideSourceRect(video, guide);
+  const outputScale = Math.min(1, maxEdge / Math.max(source.width, source.height));
+  canvas.width = Math.max(1, Math.round(source.width * outputScale));
+  canvas.height = Math.max(1, Math.round(source.height * outputScale));
+  const context = canvas.getContext('2d', { willReadFrequently: true });
   if (!context) {
-    closeBitmap(image);
-    throw new Error('結果表示用Canvasを作成できません');
+    throw new Error('カメラ画像を取得できません');
   }
-  context.drawImage(image, 0, 0, canvas.width, canvas.height);
-  closeBitmap(image);
+  context.drawImage(
+    video,
+    source.x,
+    source.y,
+    source.width,
+    source.height,
+    0,
+    0,
+    canvas.width,
+    canvas.height,
+  );
+}
 
-  const coordinateScaleX = canvas.width / result.source_size.width;
-  const coordinateScaleY = canvas.height / result.source_size.height;
-  const lineWidth = Math.max(3, Math.round(Math.max(canvas.width, canvas.height) / 420));
-  context.lineJoin = 'round';
-  context.font = `bold ${Math.max(20, lineWidth * 6)}px system-ui`;
-  for (const card of result.cards) {
-    const points = card.corners.map(([x, y]) => [x * coordinateScaleX, y * coordinateScaleY] as const);
-    context.beginPath();
-    context.moveTo(points[0][0], points[0][1]);
-    for (const [x, y] of points.slice(1)) {
-      context.lineTo(x, y);
-    }
-    context.closePath();
-    context.strokeStyle = '#21c77a';
-    context.lineWidth = lineWidth;
-    context.stroke();
-    context.fillStyle = '#d51f5d';
-    context.fillText(String(card.index), points[0][0], Math.max(24, points[0][1] - 8));
+function readFrameSample(canvas: HTMLCanvasElement): FrameSample {
+  const context = canvas.getContext('2d', { willReadFrequently: true });
+  if (!context) {
+    throw new Error('フレーム品質を確認できません');
   }
+  const rgba = context.getImageData(0, 0, canvas.width, canvas.height).data;
+  const pixels = new Uint8Array(canvas.width * canvas.height);
+  let brightness = 0;
+  let glareCount = 0;
+  for (let pixel = 0; pixel < pixels.length; pixel += 1) {
+    const offset = pixel * 4;
+    const gray = Math.round(
+      rgba[offset] * 0.299 + rgba[offset + 1] * 0.587 + rgba[offset + 2] * 0.114,
+    );
+    pixels[pixel] = gray;
+    brightness += gray;
+    if (gray >= 248) {
+      glareCount += 1;
+    }
+  }
+  let detail = 0;
+  let comparisons = 0;
+  for (let y = 1; y < canvas.height; y += 1) {
+    for (let x = 1; x < canvas.width; x += 1) {
+      const index = y * canvas.width + x;
+      detail += Math.abs(pixels[index] - pixels[index - 1]);
+      detail += Math.abs(pixels[index] - pixels[index - canvas.width]);
+      comparisons += 2;
+    }
+  }
+  return {
+    pixels,
+    detail: detail / Math.max(1, comparisons),
+    brightness: brightness / pixels.length,
+    glareRatio: glareCount / pixels.length,
+  };
 }
 
 export function MobileScanLab({ onClose }: { onClose: () => void }) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const resultCanvasRef = useRef<HTMLCanvasElement>(null);
-  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const guideRef = useRef<HTMLDivElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const sampleCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const phaseRef = useRef<ScanPhase>('stopped');
+  const busyRef = useRef(false);
+  const lastSampleRef = useRef<Uint8Array | null>(null);
+  const releaseSampleRef = useRef<Uint8Array | null>(null);
+  const stableFramesRef = useRef(0);
+  const changedFramesRef = useRef(0);
+  const capturesRef = useRef<CapturedCard[]>([]);
+  const mountedRef = useRef(true);
   const [cameraActive, setCameraActive] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState('ライブカメラを開始し、名刺が見える状態で抽出してください。');
+  const [phase, setPhaseState] = useState<ScanPhase>('stopped');
+  const [message, setMessage] = useState('ライブカメラを開始してください。');
   const [errorMessage, setErrorMessage] = useState('');
-  const [result, setResult] = useState<CardDetectionResult | null>(null);
-  const [captureSource, setCaptureSource] = useState('');
+  const [quality, setQuality] = useState<FrameSample | null>(null);
+  const [cameraSize, setCameraSize] = useState('未取得');
+  const [captures, setCaptures] = useState<CapturedCard[]>([]);
+  const [lastModel, setLastModel] = useState('');
 
-  const stopCamera = useCallback(() => {
+  const setPhase = useCallback((next: ScanPhase) => {
+    phaseRef.current = next;
+    setPhaseState(next);
+  }, []);
+
+  const replaceCaptures = useCallback((next: CapturedCard[]) => {
+    capturesRef.current = next;
+    setCaptures(next);
+  }, []);
+
+  const resetFrameState = useCallback(() => {
+    lastSampleRef.current = null;
+    releaseSampleRef.current = null;
+    stableFramesRef.current = 0;
+    changedFramesRef.current = 0;
+    setQuality(null);
+  }, []);
+
+  const stopTracks = useCallback(() => {
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
     if (videoRef.current) {
@@ -114,13 +228,24 @@ export function MobileScanLab({ onClose }: { onClose: () => void }) {
     setCameraActive(false);
   }, []);
 
+  const stopCamera = useCallback(() => {
+    stopTracks();
+    resetFrameState();
+    if (phaseRef.current !== 'finished') {
+      setPhase('stopped');
+      setMessage('カメラを停止しました。取得済みの名刺は画面内に残っています。');
+    }
+  }, [resetFrameState, setPhase, stopTracks]);
+
   useEffect(() => {
+    mountedRef.current = true;
     window.addEventListener('pagehide', stopCamera);
     return () => {
+      mountedRef.current = false;
       window.removeEventListener('pagehide', stopCamera);
-      stopCamera();
+      stopTracks();
     };
-  }, [stopCamera]);
+  }, [stopCamera, stopTracks]);
 
   const startCamera = async () => {
     setErrorMessage('');
@@ -129,6 +254,7 @@ export function MobileScanLab({ onClose }: { onClose: () => void }) {
       return;
     }
     try {
+      stopTracks();
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: false,
         video: {
@@ -138,198 +264,298 @@ export function MobileScanLab({ onClose }: { onClose: () => void }) {
         },
       });
       streamRef.current = stream;
-      if (!videoRef.current) {
+      const video = videoRef.current;
+      if (!video) {
         stream.getTracks().forEach((track) => track.stop());
         return;
       }
-      videoRef.current.srcObject = stream;
-      await videoRef.current.play();
+      video.srcObject = stream;
+      await video.play();
+      const settings = stream.getVideoTracks()[0]?.getSettings();
+      setCameraSize(`${settings?.width ?? video.videoWidth}×${settings?.height ?? video.videoHeight}`);
+      resetFrameState();
       setCameraActive(true);
-      setMessage('名刺が画面内に収まったら「この状態を高解像度で抽出」を押してください。');
+      setPhase('searching');
+      setMessage('名刺1枚の外周をガイド枠へ合わせ、そのまま静止してください。');
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'カメラを開始できません');
     }
   };
 
-  const videoFrame = async (): Promise<Blob> => {
+  const captureSample = useCallback((): FrameSample => {
     const video = videoRef.current;
-    if (!video?.videoWidth || !video.videoHeight) {
-      throw new Error('カメラ映像の準備中です');
+    const guide = guideRef.current;
+    if (!video || !guide) {
+      throw new Error('カメラガイドを取得できません');
+    }
+    const canvas = sampleCanvasRef.current ?? document.createElement('canvas');
+    sampleCanvasRef.current = canvas;
+    canvas.width = SAMPLE_WIDTH;
+    canvas.height = SAMPLE_HEIGHT;
+    const context = canvas.getContext('2d', { willReadFrequently: true });
+    if (!context) {
+      throw new Error('フレーム品質を確認できません');
+    }
+    const source = guideSourceRect(video, guide);
+    context.drawImage(
+      video,
+      source.x,
+      source.y,
+      source.width,
+      source.height,
+      0,
+      0,
+      SAMPLE_WIDTH,
+      SAMPLE_HEIGHT,
+    );
+    return readFrameSample(canvas);
+  }, []);
+
+  const captureGuideBlob = useCallback(async (): Promise<Blob> => {
+    const video = videoRef.current;
+    const guide = guideRef.current;
+    if (!video || !guide) {
+      throw new Error('カメラガイドを取得できません');
     }
     const canvas = document.createElement('canvas');
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    const context = canvas.getContext('2d');
-    if (!context) {
-      throw new Error('カメラ画像を取得できません');
-    }
-    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+    drawGuideFrame(video, guide, canvas, CAPTURE_MAX_EDGE);
     return canvasBlob(canvas);
-  };
+  }, []);
 
-  const analyze = async (blob: Blob, source: string) => {
-    setBusy(true);
-    setErrorMessage('');
-    setResult(null);
-    setMessage('高解像度画像をBCMan WebAPIで検出しています…');
-    try {
-      if (!['image/jpeg', 'image/png'].includes(blob.type)) {
-        throw new Error('JPEGまたはPNG画像を取得できませんでした');
-      }
-      const document = await detectCardRectangles(blob, true);
-      const canvas = resultCanvasRef.current;
-      if (!canvas) {
-        throw new Error('結果表示領域を作成できません');
-      }
-      await renderResult(canvas, blob, document);
-      setResult(document);
-      setCaptureSource(source);
-      const usedFallback = document.cards.some((card) => card.strategy === 'full_frame_fallback');
-      setMessage(
-        document.card_count === 0
-          ? document.candidate_count > 0
-            ? `幾何候補${document.candidate_count}件は、名刺全体ではないと判定されました（${document.elapsed_ms.toFixed(0)}ms）。`
-            : `幾何候補を検出できませんでした（${document.elapsed_ms.toFixed(0)}ms）。`
-          : usedFallback
-          ? `輪郭を検出できなかったため、画像全体を仮の1枚として表示しました（${document.elapsed_ms.toFixed(0)}ms）。`
-          : `${document.card_count}枚を${document.elapsed_ms.toFixed(0)}msで検出しました。`,
-      );
-    } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : '矩形検出に失敗しました');
-      setMessage('検出できませんでした。');
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const captureHighResolution = async () => {
-    const track = streamRef.current?.getVideoTracks()[0];
-    if (!track) {
-      setErrorMessage('先にライブカメラを開始してください。');
+  const submitGuidedCapture = useCallback(async () => {
+    if (busyRef.current || !streamRef.current) {
       return;
     }
+    busyRef.current = true;
+    setErrorMessage('');
+    setPhase('verifying');
+    setMessage('ガイド内の1枚をサーバで確認し、四隅を補正しています…');
+    let baseline: FrameSample | null = null;
     try {
-      const ImageCaptureApi = (window as Window & { ImageCapture?: ImageCaptureConstructor }).ImageCapture;
-      if (ImageCaptureApi) {
-        try {
-          await analyze(await new ImageCaptureApi(track).takePhoto(), 'カメラ静止画');
-          return;
-        } catch (error) {
-          if (!streamRef.current) {
-            throw error;
-          }
+      baseline = captureSample();
+      const result = await captureGuidedCard(await captureGuideBlob());
+      if (!mountedRef.current) {
+        return;
+      }
+      setLastModel(result.semantic_model);
+      if (!result.accepted || !result.card) {
+        setMessage('名刺1枚と確認できませんでした。いったん枠から外して合わせ直してください。');
+      } else {
+        const duplicate = capturesRef.current.some(
+          (item) => fingerprintDistance(item.fingerprint, result.card!.fingerprint) <= DUPLICATE_DISTANCE_MAX,
+        );
+        if (duplicate) {
+          setMessage('同じ名刺がすでにピックアップされています。次の名刺へ移ってください。');
+        } else {
+          const next = [
+            ...capturesRef.current,
+            { ...result.card, id: `${Date.now()}-${result.card.fingerprint}` },
+          ];
+          replaceCaptures(next);
+          navigator.vibrate?.(80);
+          setMessage(`${next.length}枚目をピックアップしました。名刺を枠から外してください。`);
         }
       }
-      await analyze(await videoFrame(), '動画フレーム（静止画API非対応）');
+      releaseSampleRef.current = baseline.pixels;
+      lastSampleRef.current = null;
+      stableFramesRef.current = 0;
+      changedFramesRef.current = 0;
+      setPhase('release');
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : '静止画を取得できません');
+      if (mountedRef.current) {
+        setErrorMessage(error instanceof Error ? error.message : '名刺を確認できませんでした');
+        setMessage('通信または画像取得に失敗しました。静止してもう一度お試しください。');
+        setPhase('searching');
+      }
+    } finally {
+      busyRef.current = false;
     }
+  }, [captureGuideBlob, captureSample, replaceCaptures, setPhase]);
+
+  useEffect(() => {
+    if (!cameraActive) {
+      return undefined;
+    }
+    const timer = window.setInterval(() => {
+      if (busyRef.current || phaseRef.current === 'finished' || phaseRef.current === 'stopped') {
+        return;
+      }
+      try {
+        const sample = captureSample();
+        setQuality(sample);
+        if (phaseRef.current === 'release') {
+          const baseline = releaseSampleRef.current;
+          if (baseline && frameDifference(baseline, sample.pixels) >= RELEASE_DIFF_MIN) {
+            changedFramesRef.current += 1;
+          } else {
+            changedFramesRef.current = 0;
+          }
+          if (changedFramesRef.current >= 2) {
+            resetFrameState();
+            setPhase('searching');
+            setMessage('次の名刺をガイド枠へ合わせて静止してください。');
+          }
+          return;
+        }
+
+        const qualityProblem =
+          sample.brightness < 35
+            ? '暗すぎます。照明を明るくしてください。'
+            : sample.brightness > 245
+              ? '明るすぎます。反射を避けてください。'
+              : sample.glareRatio > 0.42
+                ? '白飛びが多いため、カメラの角度を少し変えてください。'
+                : sample.detail < DETAIL_MIN
+                  ? '名刺を枠いっぱいに合わせ、ピントが合うまで待ってください。'
+                  : '';
+        if (qualityProblem) {
+          stableFramesRef.current = 0;
+          lastSampleRef.current = sample.pixels;
+          setPhase('searching');
+          setMessage(qualityProblem);
+          return;
+        }
+
+        const previous = lastSampleRef.current;
+        const difference = previous
+          ? frameDifference(previous, sample.pixels)
+          : Number.POSITIVE_INFINITY;
+        lastSampleRef.current = sample.pixels;
+        if (difference <= STABLE_DIFF_MAX) {
+          stableFramesRef.current += 1;
+          setPhase('holding');
+          setMessage(`静止判定中… ${Math.min(stableFramesRef.current, STABLE_FRAME_COUNT)}/${STABLE_FRAME_COUNT}`);
+        } else {
+          stableFramesRef.current = 0;
+          setPhase('searching');
+          setMessage('名刺1枚の外周をガイド枠へ合わせ、そのまま静止してください。');
+        }
+        if (stableFramesRef.current >= STABLE_FRAME_COUNT) {
+          void submitGuidedCapture();
+        }
+      } catch (error) {
+        setErrorMessage(error instanceof Error ? error.message : '動画フレームを解析できません');
+      }
+    }, ANALYZE_INTERVAL_MS);
+    return () => window.clearInterval(timer);
+  }, [cameraActive, captureSample, resetFrameState, setPhase, submitGuidedCapture]);
+
+  const finishCapture = () => {
+    stopTracks();
+    resetFrameState();
+    setPhase('finished');
+    setMessage(`${capturesRef.current.length}枚で撮影を終了しました。補正済み画像を確認してください。`);
   };
 
-  const handlePhoto = (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    event.target.value = '';
-    if (file) {
-      void analyze(file, '写真撮影・ファイル選択');
-    }
+  const removeCapture = (id: string) => {
+    replaceCaptures(capturesRef.current.filter((item) => item.id !== id));
   };
 
-  const usedFallback = result?.cards.some((card) => card.strategy === 'full_frame_fallback') ?? false;
+  const clearCaptures = () => {
+    replaceCaptures([]);
+    setMessage(cameraActive ? '一覧をクリアしました。次の名刺を合わせてください。' : '一覧をクリアしました。');
+  };
 
   return (
     <div className="screen mobile-lab">
       <div className="mobile-lab__heading">
         <button type="button" className="button button--ghost" onClick={onClose}>撮影画面へ戻る</button>
-        <span className="mobile-lab__badge">非保存テスト</span>
+        <span className="mobile-lab__badge">非保存・1枚ずつ</span>
       </div>
 
       <div className="hero">
         <div className="hero__icon" aria-hidden="true">🎥</div>
-        <h2 className="hero__title">動画から矩形検出</h2>
-        <p className="hero__note">ボタンを押した瞬間の1枚だけをWebAPIへ送り、輪郭と名刺らしさの両方を判定します。画像や切り抜きは保存しません。</p>
+        <h2 className="hero__title">名刺を1枚ずつピックアップ</h2>
+        <p className="hero__note">中央の枠へ1枚ずつ合わせると自動撮影します。補正済み画像はこの画面を閉じるまでだけ保持します。</p>
       </div>
 
       {errorMessage && <p className="alert alert--error">{errorMessage}</p>}
-      <p className="mobile-lab__status" aria-live="polite">{message}</p>
+      <p className={`mobile-lab__status mobile-lab__status--${phase}`} aria-live="polite">
+        <strong>{PHASE_LABELS[phase]}</strong><br />{message}
+      </p>
 
       <div className="mobile-lab__video-stage">
         <video ref={videoRef} autoPlay muted playsInline />
-        <div className="mobile-lab__guide" aria-hidden="true" />
+        <div ref={guideRef} className={`mobile-lab__guide mobile-lab__guide--${phase}`} aria-hidden="true">
+          <span>名刺1枚を枠いっぱいに</span>
+        </div>
         {!cameraActive && <span className="mobile-lab__video-placeholder">カメラ停止中</span>}
+      </div>
+
+      <div className="mobile-lab__telemetry" aria-label="撮影状態">
+        <span>カメラ {cameraSize}</span>
+        <span>鮮明度 {quality ? quality.detail.toFixed(1) : '-'}</span>
+        <span>取得 {captures.length}枚</span>
       </div>
 
       <div className="mobile-lab__actions">
         <button
           type="button"
           className="button button--primary"
-          disabled={cameraActive || busy}
+          disabled={cameraActive || phase === 'verifying'}
           onClick={() => void startCamera()}
         >
-          ライブカメラを開始
+          {phase === 'finished' ? '撮影を再開' : 'ライブカメラを開始'}
         </button>
         <button
           type="button"
           className="button button--ghost"
-          disabled={!cameraActive || busy}
+          disabled={!cameraActive || phase === 'verifying'}
           onClick={stopCamera}
         >
-          停止
+          カメラ停止
         </button>
       </div>
 
       <button
         type="button"
         className="button button--primary button--xl"
-        disabled={!cameraActive || busy}
-        onClick={() => void captureHighResolution()}
+        disabled={!cameraActive || phase === 'verifying' || phase === 'release'}
+        onClick={() => void submitGuidedCapture()}
       >
-        {busy ? 'WebAPIで検出中…' : 'この状態を高解像度で抽出'}
+        {phase === 'verifying' ? 'サーバで確認中…' : '今すぐ1枚を判定'}
       </button>
 
-      <input
-        ref={cameraInputRef}
-        className="hidden-input"
-        type="file"
-        accept="image/jpeg,image/png"
-        capture="environment"
-        onChange={handlePhoto}
-      />
       <button
         type="button"
         className="button button--ghost"
-        disabled={busy}
-        onClick={() => cameraInputRef.current?.click()}
+        disabled={phase === 'verifying' || captures.length === 0}
+        onClick={finishCapture}
       >
-        高解像度の写真だけで試す
+        撮影終了（{captures.length}枚）
       </button>
 
       <p className="hint">
-        Android Chromeでは静止画APIを優先します。非対応端末は動画解像度になるため、結果の取得元とサイズを確認してください。
+        自動撮影後は、同じ名刺の連続取得を防ぐため一度ガイド枠から外してください。
+        {lastModel ? ` 判定モデル: ${lastModel}` : ''}
       </p>
 
       <section className="mobile-lab__result">
         <div className="mobile-lab__result-title">
-          <h3>検出結果</h3>
-          <span className={result && result.card_count > 0 && !usedFallback ? 'mobile-lab__badge mobile-lab__badge--ready' : 'mobile-lab__badge'}>
-            {result ? (usedFallback ? '仮矩形' : `${result.card_count}枚`) : '未実行'}
-          </span>
+          <h3>ピックアップ済み</h3>
+          <div className="mobile-lab__result-actions">
+            <span className={`mobile-lab__badge ${captures.length ? 'mobile-lab__badge--ready' : ''}`}>{captures.length}枚</span>
+            {captures.length > 0 && (
+              <button type="button" className="button button--ghost button--small" onClick={clearCaptures}>クリア</button>
+            )}
+          </div>
         </div>
-        <canvas ref={resultCanvasRef} className="mobile-lab__result-canvas" hidden={!result} />
-        {result && (
-          <>
-            <p className="hint">
-              {captureSource}・{result.source_size.width}×{result.source_size.height}px・候補{result.candidate_count}件
-              {result.semantic_model ? `・${result.semantic_model}` : ''}
-            </p>
-            <ul className="mobile-lab__detections">
-              {result.cards.map((card) => (
-                <li key={card.index}>
-                  #{card.index} {card.strategy}・geometry {card.confidence.toFixed(3)}
-                  {card.semantic_confidence !== undefined ? `・cardness ${card.semantic_confidence.toFixed(3)}` : ''}
-                </li>
-              ))}
-            </ul>
-          </>
+        {captures.length === 0 ? (
+          <p className="hint">まだ名刺を取得していません。</p>
+        ) : (
+          <ol className="mobile-lab__gallery">
+            {captures.map((card, index) => (
+              <li key={card.id} className="mobile-lab__gallery-card">
+                <img src={card.crop_data_url} alt={`ピックアップした名刺 ${index + 1}`} />
+                <div>
+                  <strong>#{index + 1}</strong>
+                  <span>cardness {card.semantic_confidence.toFixed(3)}</span>
+                  <span>{card.crop_size.width}×{card.crop_size.height}px</span>
+                </div>
+                <button type="button" className="button button--ghost button--small" onClick={() => removeCapture(card.id)}>削除</button>
+              </li>
+            ))}
+          </ol>
         )}
       </section>
     </div>

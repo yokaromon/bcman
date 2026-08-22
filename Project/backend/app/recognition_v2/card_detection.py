@@ -6,6 +6,7 @@ decodeし、切り抜きも生成せず、元画像座標の四隅だけをJSON�
 
 from __future__ import annotations
 
+import base64
 import time
 from collections.abc import Callable
 
@@ -17,6 +18,9 @@ from .card_semantics import SemanticSelection
 
 
 SEMANTIC_MIN_CONFIDENCE = 0.60
+GUIDED_CANDIDATE_LIMIT = 4
+GUIDED_MIN_AREA_RATIO = 0.20
+GUIDED_CROP_MAX_EDGE = 1800
 SemanticFilter = Callable[
     [np.ndarray, list[detector.Detection]], SemanticSelection
 ]
@@ -64,6 +68,84 @@ def _decode_image(payload: bytes, max_pixels: int) -> np.ndarray:
 
 def _corners_json(corners: np.ndarray) -> list[list[float]]:
     return [[round(float(x), 2), round(float(y), 2)] for x, y in corners]
+
+
+def _guided_seed(image: np.ndarray) -> detector.Detection:
+    """中央ガイドへ合わせた1枚を、輪郭が薄い場合にもVisionへ渡す初期候補。"""
+    height, width = image.shape[:2]
+    return detector.Detection(
+        corners=detector.ordered_corners(
+            [[0, 0], [width - 1, 0], [width - 1, height - 1], [0, height - 1]]
+        ),
+        confidence=0.5,
+        strategy="guided-roi-seed",
+        score=0.5,
+        contrast=0.0,
+    )
+
+
+def _guided_candidates(image: np.ndarray) -> list[detector.Detection]:
+    """ガイド全体と、その内側で得られた十分大きい局所輪郭だけを候補にする。"""
+    height, width = image.shape[:2]
+    photo_area = float(width * height)
+    seed = _guided_seed(image)
+    selected = [seed]
+    for item in detector.detect_cards(image):
+        corners = detector.ordered_corners(item.corners)
+        area_ratio = abs(float(cv2.contourArea(corners))) / photo_area
+        center = corners.mean(axis=0)
+        centered = (
+            abs(float(center[0]) / width - 0.5) <= 0.30
+            and abs(float(center[1]) / height - 0.5) <= 0.30
+        )
+        if area_ratio < GUIDED_MIN_AREA_RATIO or not centered:
+            continue
+        if any(detector.quadrilateral_iou(corners, other.corners) >= 0.88 for other in selected):
+            continue
+        selected.append(item)
+        if len(selected) >= GUIDED_CANDIDATE_LIMIT:
+            break
+    return selected
+
+
+def _crop_quality(image: np.ndarray) -> dict:
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    return {
+        "sharpness": round(float(cv2.Laplacian(gray, cv2.CV_64F).var()), 2),
+        "brightness": round(float(gray.mean()), 2),
+        "glare_ratio": round(float(np.mean(gray >= 250)), 4),
+    }
+
+
+def _crop_fingerprint(image: np.ndarray) -> str:
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    sample = cv2.resize(gray, (9, 8), interpolation=cv2.INTER_AREA)
+    bits = (sample[:, 1:] >= sample[:, :-1]).reshape(-1)
+    value = sum(int(bit) << index for index, bit in enumerate(bits))
+    return f"{value:016x}"
+
+
+def _crop_data_url(image: np.ndarray) -> tuple[str, dict[str, int]]:
+    height, width = image.shape[:2]
+    scale = min(1.0, GUIDED_CROP_MAX_EDGE / float(max(height, width)))
+    encoded_image = (
+        cv2.resize(
+            image,
+            (max(1, round(width * scale)), max(1, round(height * scale))),
+            interpolation=cv2.INTER_AREA,
+        )
+        if scale < 1.0
+        else image
+    )
+    ok, encoded = cv2.imencode(
+        ".jpg", encoded_image, [cv2.IMWRITE_JPEG_QUALITY, 90]
+    )
+    if not ok:
+        raise ValueError("補正済み名刺画像をJPEG化できません")
+    return (
+        "data:image/jpeg;base64," + base64.b64encode(encoded).decode("ascii"),
+        {"width": int(encoded_image.shape[1]), "height": int(encoded_image.shape[0])},
+    )
 
 
 def _refine_semantic_detection(
@@ -165,4 +247,77 @@ def analyze_card_rectangles(
             semantic_selection.attempts if semantic_selection is not None else 0
         ),
         "cards": cards,
+    }
+
+
+def analyze_guided_card_capture(
+    payload: bytes,
+    max_pixels: int,
+    semantic_filter: SemanticFilter,
+) -> dict:
+    """中央ガイドから1枚だけを検証・補正し、保存せずクライアントへ返す。"""
+    image = _decode_image(payload, max_pixels)
+    started = time.perf_counter()
+    candidates = _guided_candidates(image)
+    semantic_selection = semantic_filter(image, candidates)
+    accepted = [
+        (candidate_id, detection)
+        for candidate_id, detection in enumerate(candidates, 1)
+        if (
+            semantic_selection.verdicts[candidate_id].decision == "business_card"
+            and semantic_selection.verdicts[candidate_id].confidence
+            >= SEMANTIC_MIN_CONFIDENCE
+        )
+    ]
+    base = {
+        "detector_version": detector.DETECTOR_VERSION,
+        "guided_version": "guided-single-card-v1",
+        "authoritative": True,
+        "persisted": False,
+        "source_size": {
+            "width": int(image.shape[1]),
+            "height": int(image.shape[0]),
+        },
+        "candidate_count": len(candidates),
+        "semantic_model": semantic_selection.model,
+        "semantic_attempts": semantic_selection.attempts,
+    }
+    if not accepted:
+        return {
+            **base,
+            "accepted": False,
+            "reason": "not_business_card",
+            "elapsed_ms": round((time.perf_counter() - started) * 1000, 2),
+            "card": None,
+        }
+
+    precise = [
+        item for item in accepted if item[1].strategy != "guided-roi-seed"
+    ]
+    candidate_id, selected = max(
+        precise or accepted,
+        key=lambda item: (
+            semantic_selection.verdicts[item[0]].confidence,
+            item[1].confidence,
+        ),
+    )
+    refined = _refine_semantic_detection(image, selected)
+    crop = detector.perspective_crop(image, refined.corners)
+    crop_url, crop_size = _crop_data_url(crop)
+    verdict = semantic_selection.verdicts[candidate_id]
+    return {
+        **base,
+        "accepted": True,
+        "reason": "accepted",
+        "elapsed_ms": round((time.perf_counter() - started) * 1000, 2),
+        "card": {
+            "corners": _corners_json(refined.corners),
+            "confidence": round(float(refined.confidence), 4),
+            "semantic_confidence": verdict.confidence,
+            "strategy": refined.strategy,
+            "quality": _crop_quality(crop),
+            "fingerprint": _crop_fingerprint(crop),
+            "crop_size": crop_size,
+            "crop_data_url": crop_url,
+        },
     }

@@ -186,6 +186,134 @@ def test_semantic_api_uses_managed_filter_without_persisting(monkeypatch):
         assert (db.query(Photo).count(), db.query(BusinessCard).count()) == before_rows
 
 
+def test_guided_capture_uses_full_guide_seed_and_returns_corrected_crop(monkeypatch):
+    monkeypatch.setattr(card_detection.detector, "detect_cards", lambda _image: [])
+    monkeypatch.setattr(
+        card_detection,
+        "_refine_semantic_detection",
+        lambda _image, item: item,
+    )
+
+    def semantic_filter(_image, candidates):
+        assert [item.strategy for item in candidates] == ["guided-roi-seed"]
+        return SemanticSelection(
+            {1: SemanticVerdict(1, "business_card", 0.97, "one_complete_card")},
+            1,
+            "vision-fixed",
+        )
+
+    result = card_detection.analyze_guided_card_capture(
+        _jpeg(), 48_000_000, semantic_filter
+    )
+
+    assert result["accepted"] is True
+    assert result["persisted"] is False
+    assert result["candidate_count"] == 1
+    assert result["card"]["strategy"] == "guided-roi-seed"
+    assert result["card"]["semantic_confidence"] == 0.97
+    assert result["card"]["crop_size"] == {"width": 639, "height": 479}
+    assert result["card"]["crop_data_url"].startswith("data:image/jpeg;base64,")
+    assert len(result["card"]["fingerprint"]) == 16
+
+
+def test_guided_capture_returns_rejection_without_crop(monkeypatch):
+    monkeypatch.setattr(card_detection.detector, "detect_cards", lambda _image: [])
+
+    def semantic_filter(_image, _candidates):
+        return SemanticSelection(
+            {1: SemanticVerdict(1, "not_business_card", 0.99, "non_card_object")},
+            1,
+            "vision-fixed",
+        )
+
+    result = card_detection.analyze_guided_card_capture(
+        _jpeg(), 48_000_000, semantic_filter
+    )
+
+    assert result["accepted"] is False
+    assert result["reason"] == "not_business_card"
+    assert result["card"] is None
+
+
+def test_guided_capture_prefers_precise_candidate_over_accepted_seed(monkeypatch):
+    precise = detector.Detection(
+        corners=np.float32([[30, 40], [610, 40], [610, 440], [30, 440]]),
+        confidence=0.82,
+        strategy="precise-local-card",
+        score=0.82,
+        contrast=0.7,
+    )
+    monkeypatch.setattr(
+        card_detection.detector,
+        "detect_cards",
+        lambda _image: [precise],
+    )
+    monkeypatch.setattr(
+        card_detection,
+        "_refine_semantic_detection",
+        lambda _image, item: item,
+    )
+
+    def semantic_filter(_image, _candidates):
+        return SemanticSelection(
+            {
+                1: SemanticVerdict(1, "business_card", 0.99, "one_complete_card"),
+                2: SemanticVerdict(2, "business_card", 0.95, "one_complete_card"),
+            },
+            1,
+            "vision-fixed",
+        )
+
+    result = card_detection.analyze_guided_card_capture(
+        _jpeg(), 48_000_000, semantic_filter
+    )
+
+    assert result["accepted"] is True
+    assert result["card"]["strategy"] == "precise-local-card"
+    assert result["card"]["corners"] == [
+        [30.0, 40.0], [610.0, 40.0], [610.0, 440.0], [30.0, 440.0]
+    ]
+
+
+def test_guided_capture_api_does_not_persist_image_or_rows(monkeypatch):
+    from app import main
+
+    monkeypatch.setattr(card_detection.detector, "detect_cards", lambda _image: [])
+    monkeypatch.setattr(
+        card_detection,
+        "_refine_semantic_detection",
+        lambda _image, item: item,
+    )
+    monkeypatch.setattr(
+        main,
+        "managed_card_semantic_filter",
+        lambda _image, _candidates: SemanticSelection(
+            {1: SemanticVerdict(1, "business_card", 0.95, "one_complete_card")},
+            1,
+            "vision-fixed",
+        ),
+    )
+    app.dependency_overrides[current_user] = _authenticated_user
+    before_files = _stored_files(settings.storage_dir)
+    with SessionLocal() as db:
+        before_rows = (db.query(Photo).count(), db.query(BusinessCard).count())
+    try:
+        with TestClient(app) as client:
+            response = client.post(
+                "/api/guided-card-captures",
+                content=_jpeg(),
+                headers={"Content-Type": "image/jpeg"},
+            )
+    finally:
+        app.dependency_overrides.pop(current_user, None)
+
+    assert response.status_code == 200
+    assert response.json()["accepted"] is True
+    assert _stored_files(settings.storage_dir) == before_files
+    with SessionLocal() as db:
+        assert (db.query(Photo).count(), db.query(BusinessCard).count()) == before_rows
+
+
 def test_detection_rejects_wrong_media_type_before_running_detector(monkeypatch):
     called = False
 

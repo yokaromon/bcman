@@ -16,7 +16,7 @@ from .invitations import complete_invitation, describe_invitation, issue_invitat
 from .migrations import apply_sqlite_migrations
 from .models import AuditLog, BusinessCard, Contact, Group, OCRResult, Organization, Photo, TrustedDevice, User, UserGroup
 from .provider import router as provider_router
-from .recognition_v2.card_detection import DetectionImageTooLarge, InvalidDetectionImage, analyze_card_rectangles
+from .recognition_v2.card_detection import DetectionImageTooLarge, InvalidDetectionImage, analyze_card_rectangles, analyze_guided_card_capture
 from .recognition_v2.card_semantics import CardSemanticContractError, classify_card_candidates
 from .recognition_v2.ykr_client import ManagedRecognitionClient, ManagedRecognitionError, YkrSettings
 from .schemas import BatchConfirmInput, CardRegistrationInput, CompleteReviewInput, ContactInput, GroupInput, InvitationCompleteInput, LoginInput, ManualCardInput, OrientationInput, OrganizationInput, ReplacementApplyInput, ReprocessInput, TotpInput, UserInput, normalize_company_code
@@ -298,6 +298,26 @@ async def detect_card_rectangles(request: Request, semantic: bool=False, user: U
         raise HTTPException(413, str(exc)) from exc
     except (ManagedRecognitionError, CardSemanticContractError) as exc:
         raise HTTPException(502, f"名刺候補の意味判定に失敗しました: {exc}") from exc
+
+
+@app.post("/api/guided-card-captures")
+async def guided_card_capture(request: Request, user: User=Depends(current_user)):
+    """中央ガイド内の1枚を補正して返す。画像・切り抜き・DB行は保存しない。"""
+    _ = user
+    payload = await read_detection_payload(request)
+    try:
+        return await run_in_threadpool(
+            analyze_guided_card_capture,
+            payload,
+            settings.max_detection_pixels,
+            managed_card_semantic_filter,
+        )
+    except InvalidDetectionImage as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except DetectionImageTooLarge as exc:
+        raise HTTPException(413, str(exc)) from exc
+    except (ManagedRecognitionError, CardSemanticContractError) as exc:
+        raise HTTPException(502, f"ガイド内の名刺判定に失敗しました: {exc}") from exc
 
 def resolve_pipeline_version(user: User) -> str:
     """写真ごとの選択制ではなく、`RECOGNITION_PIPELINE_V2_ENABLED` だけがV1/V2を切り替える
