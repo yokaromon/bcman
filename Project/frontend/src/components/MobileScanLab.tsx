@@ -91,7 +91,9 @@ function guideSourceRect(video: HTMLVideoElement, guide: HTMLDivElement): Source
   }
   const videoBounds = video.getBoundingClientRect();
   const guideBounds = guide.getBoundingClientRect();
-  const scale = Math.min(
+  // The preview uses object-fit: cover. Use the same scale here so the
+  // pixels sent to the API exactly match the guide visible to the user.
+  const scale = Math.max(
     videoBounds.width / video.videoWidth,
     videoBounds.height / video.videoHeight,
   );
